@@ -1,16 +1,5 @@
 package com.bergerkiller.bukkit.tc.controller.components;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import org.bukkit.Location;
-import org.bukkit.util.Vector;
-
 import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.utils.MathUtil;
@@ -24,9 +13,14 @@ import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.signactions.mutex.MutexZone;
 import com.bergerkiller.bukkit.tc.signactions.mutex.MutexZoneCacheWorld;
 import com.bergerkiller.bukkit.tc.signactions.mutex.MutexZoneSlot;
-import com.bergerkiller.bukkit.tc.signactions.mutex.MutexZoneSlot.EnteredGroup;
 import com.bergerkiller.bukkit.tc.utils.ForwardChunkArea;
 import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
+import org.bukkit.Location;
+import org.bukkit.util.Vector;
+
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Checks the rails ahead of the train for any obstacles that exist there.
@@ -78,7 +72,7 @@ public class ObstacleTracker implements TrainStatusProvider {
      * and if so, returns a new max speed value the train should use. This operates in the
      * speed-factor applied to domain. Meaning this update() function is called multiple
      * times per tick at high speeds.
-     * 
+     *
      * @param trainSpeed Current true speed of the train (update speed factor accounted for)
      */
     public void update(double trainSpeed) {
@@ -123,16 +117,19 @@ public class ObstacleTracker implements TrainStatusProvider {
         // a position update, so we are safe in overriding that in this current tick. But
         // last tick's speed resulted in movement, so that cannot be dramatically deviated
         // from.
-        double baseSpeedLimitThisTick;
-        {
-            double speedLimitLastTick = (this.waitDistanceLastSpeedLimit == Double.MAX_VALUE) ?
-                    properties.getSpeedLimit() : this.waitDistanceLastSpeedLimit;
-            double trainSpeedLastTick = (this.waitDistanceLastTrainSpeed == Double.MAX_VALUE) ?
-                    trainSpeed : this.waitDistanceLastTrainSpeed;
-            baseSpeedLimitThisTick = Math.min(speedLimitLastTick, trainSpeedLastTick);
 
-            this.waitDistanceLastTrainSpeed = trainSpeed;
-        }
+        double speedLimitLastTick = (this.waitDistanceLastSpeedLimit == Double.MAX_VALUE)
+                ? properties.getSpeedLimit()
+                : this.waitDistanceLastSpeedLimit;
+
+        double trainSpeedLastTick = (this.waitDistanceLastTrainSpeed == Double.MAX_VALUE)
+                ? trainSpeed
+                : this.waitDistanceLastTrainSpeed;
+
+        double baseSpeedLimitThisTick = Math.min(speedLimitLastTick, trainSpeedLastTick);
+
+        this.waitDistanceLastTrainSpeed = trainSpeed;
+
 
         // At the current speed, how much extra distance does it take to slow the train down to 0?
         // Look for obstacles this much extra distance ahead, to allow for stopping in time.
@@ -140,8 +137,13 @@ public class ObstacleTracker implements TrainStatusProvider {
         // distance up a head, since it takes less long to slow to a complete stop.
         boolean checkTrains = (properties.getWaitDistance() > 0.0);
 
-        ObstacleSpeedLimit newDesiredSpeed = getDesiredSpeedLimit(searchAheadDistance,
-                properties.getWaitDeceleration(), checkTrains, true, properties.getWaitDistance());
+        ObstacleSpeedLimit newDesiredSpeed = getDesiredSpeedLimit(
+                searchAheadDistance,
+                properties.getWaitDeceleration(),
+                checkTrains,
+                true,
+                properties.getWaitDistance()
+        );
 
         // Every time the speed drops to 0 consistently, reset the wait tick timer to 0
         // This causes it to wait until the remaining ticks reaches the configured delay
@@ -157,7 +159,7 @@ public class ObstacleTracker implements TrainStatusProvider {
             if (delay <= 0.0) {
                 this.waitRemainingTicks = Integer.MAX_VALUE; // No delay
             } else {
-                if (++this.waitRemainingTicks >= MathUtil.ceil(delay*20.0)) {
+                if (++this.waitRemainingTicks >= MathUtil.ceil(delay * 20.0)) {
                     this.waitRemainingTicks = Integer.MAX_VALUE; // Delay elapsed
                 }
                 this.waitDistanceLastSpeedLimit = 0.0;
@@ -191,6 +193,7 @@ public class ObstacleTracker implements TrainStatusProvider {
         }
 
         double speedDiff = (newDesiredSpeed.speed - this.waitDistanceLastSpeedLimit);
+
         if (speedDiff >= 0.0) {
             // Speed up
             double acceleration = properties.getWaitAcceleration();
@@ -222,27 +225,39 @@ public class ObstacleTracker implements TrainStatusProvider {
     private void hardEnterNewMutexZoneIfInside(MutexZone newMutexZone) {
         // Go by all members, check if this zone is at all nearby
         // This avoids expensive calculations for trains far away from this new mutex zone
-        boolean isNearby = false;
-        for (MinecartMember<?> member : group) {
-            IntVector3 blockPos = member.getRailTracker().getState().positionOfflineBlock().getPosition();
-            int radius = (int) (3.0 * (double) member.getEntity().getWidth());
-            if (newMutexZone.isNearby(blockPos, radius)) {
-                isNearby = true;
-                break;
-            }
-        }
+
+        //TODO: Optimization
+        // boolean isNearby = group
+        //         .parallelStream()
+        //         .anyMatch(m -> {
+        //             IntVector3 blockPos = m.getRailTracker().getState().positionOfflineBlock().getPosition();
+        //             int radius = (int) (3.0 * (double) m.getEntity().getWidth());
+        //             return newMutexZone.isNearby(blockPos, radius);
+        //         });
+
+       boolean isNearby = false;
+       for (MinecartMember<?> member : group) {
+           IntVector3 blockPos = member.getRailTracker().getState().positionOfflineBlock().getPosition();
+           int radius = (int) (3.0 * (double) member.getEntity().getWidth());
+           if (newMutexZone.isNearby(blockPos, radius)) {
+               isNearby = true;
+               break;
+           }
+       }
+
         if (!isNearby) {
             return;
         }
 
         // Iterate all rails of group
         List<RailTracker.TrackedRail> rails = group.getRailTracker().getRailInformation();
+
         if (rails.isEmpty()) {
             return; // Meh.
         }
 
         // Initialize a moving point with the presumed first encountered chunk
-        final MutexZone[] zones = new MutexZone[] { newMutexZone };
+        final List<MutexZone> zones = Collections.singletonList(newMutexZone);
         RailPath.Position firstPosition = rails.get(0).state.position();
         MutexZoneCacheWorld.MovingPoint movingPoint = new MutexZoneCacheWorld.MovingPoint((cx, cz) -> zones,
                 MathUtil.toChunk(firstPosition.posX), MathUtil.toChunk(firstPosition.posZ));
@@ -265,11 +280,12 @@ public class ObstacleTracker implements TrainStatusProvider {
             start.makeAbsolute(rail.state.railBlock());
             end.makeAbsolute(rail.state.railBlock());
             MutexZoneCacheWorld.MutexZoneResult result = movingPoint.get(start, end);
-            if (result != null && result.zone == newMutexZone && result.distance <= 0.0) {
+            if (result != null && result.zone() == newMutexZone && result.distance() <= 0.0) {
                 isInsideZone = true;
                 break;
             }
         }
+        
         if (!isInsideZone) {
             return;
         }
@@ -328,24 +344,24 @@ public class ObstacleTracker implements TrainStatusProvider {
      * Calculates the desired speed limit the train should ideally have right now.
      * Based on acceleration/deceleration, the actual speed limit is adjusted to reach
      * this speed.
-     * 
+     *
      * @param searchAheadDistance How much distance ahead of the train to look for obstacles
      *                            that would alter the maximum desired speed.
-     * @param deceleration The de-acceleration the train has to stop for the obstacle. 0 for instant.
-     *                     This controls the speed limit found, assuming the train can stop at this rate
-     *                     to avoid collision in the future.
-     * @param checkTrains Whether to check for trains ahead blocking the track
-     * @param checkRailObstacles Whether to check for rail obstacles, like mutex zones
-     * @param trainDistance How much extra distance should be kept between this train and any
-     *                      other trains ahead
+     * @param deceleration        The de-acceleration the train has to stop for the obstacle. 0 for instant.
+     *                            This controls the speed limit found, assuming the train can stop at this rate
+     *                            to avoid collision in the future.
+     * @param checkTrains         Whether to check for trains ahead blocking the track
+     * @param checkRailObstacles  Whether to check for rail obstacles, like mutex zones
+     * @param trainDistance       How much extra distance should be kept between this train and any
+     *                            other trains ahead
      * @return desired speed limit
      */
     private ObstacleSpeedLimit getDesiredSpeedLimit(double searchAheadDistance, double deceleration,
-            boolean checkTrains, boolean checkRailObstacles, double trainDistance
+                                                    boolean checkTrains, boolean checkRailObstacles, double trainDistance
     ) {
         // Find obstacles. Update the mutex zone found (train status)
         ObstacleFinder finder = new ObstacleFinder(Math.min(2000.0, searchAheadDistance),
-                                                   checkTrains, checkRailObstacles, trainDistance);
+                checkTrains, checkRailObstacles, trainDistance);
         List<Obstacle> obstacles = finder.search();
         this.enteredMutexZones = finder.enteredMutexZones;
         return this.lastObstacleSpeedLimit = minimumSpeedLimit(obstacles, deceleration);
@@ -354,12 +370,12 @@ public class ObstacleTracker implements TrainStatusProvider {
     /**
      * Looks up ahead on the track for obstacles. These can be other trains, or mutex
      * signs that disallow movement further.
-     * 
-     * @param distance Distance in blocks to check ahead of the train
-     * @param checkTrains Whether to look for trains or only for mutex signs
+     *
+     * @param distance           Distance in blocks to check ahead of the train
+     * @param checkTrains        Whether to look for trains or only for mutex signs
      * @param checkRailObstacles Whether to check for rail obstacles, like mutex zones
-     * @param trainDistance If checkTrains true, what distance to subtract from obstacles
-     *                      distance to maintain a safety distance from them.
+     * @param trainDistance      If checkTrains true, what distance to subtract from obstacles
+     *                           distance to maintain a safety distance from them.
      * @return obstacle that was detected, null if there is no obstacle
      */
     public List<Obstacle> findObstaclesAhead(double distance, boolean checkTrains, boolean checkRailObstacles, double trainDistance) {
@@ -370,7 +386,7 @@ public class ObstacleTracker implements TrainStatusProvider {
      * Finds the minimum speed limit in a Collection of obstacles. If the collection
      * is empty, returns {@link ObstacleSpeedLimit#NONE}
      *
-     * @param obstacles Obstacles
+     * @param obstacles    Obstacles
      * @param deceleration Maximum rate of deceleration
      * @return Minimum speed limit to avoid the nearest obstacle
      */
@@ -533,18 +549,18 @@ public class ObstacleTracker implements TrainStatusProvider {
                             if (newMutexResult != null) {
                                 // If checking for soft mutexes, always allow if its within range
                                 // If not, it must be the same slot / expanded smart mutex zone to count
-                                double distanceToMutex = distanceFromFront + newMutexResult.distance;
+                                double distanceToMutex = distanceFromFront + newMutexResult.distance();
                                 boolean accept;
-                                if (prevMutex != null && prevMutex.slot == newMutexResult.zone.slot) {
+                                if (prevMutex != null && prevMutex.slot == newMutexResult.zone().slot) {
                                     accept = true;
                                 } else {
                                     accept = checkForNewMutexes && (distanceToMutex < mutexSoftDistance);
                                 }
                                 if (accept) {
-                                    newMutexResult.zone.onUsed(group);
-                                    currentMutex = newMutexResult.zone;
+                                    newMutexResult.zone().onUsed(group);
+                                    currentMutex = newMutexResult.zone();
                                     currentMutexSpacing = currentMutex.getSpacing(group);
-                                    currentMutexGroup = newMutexResult.zone.slot.track(group, distanceToMutex);
+                                    currentMutexGroup = newMutexResult.zone().slot.track(group, distanceToMutex);
                                     currentMutexHard = currentMutexGroup.distanceToMutex <= mutexHardDistance;
                                 }
                             }
@@ -586,8 +602,8 @@ public class ObstacleTracker implements TrainStatusProvider {
                     // This is important when iterating over the first track only, because then this is not guaranteed
                     if (iter.movedTotal == 0.0) {
                         Vector delta = new Vector(member_position.getX() - state_position.getX(),
-                                                  member_position.getY() - state_position.getY(),
-                                                  member_position.getZ() - state_position.getZ());
+                                member_position.getY() - state_position.getY(),
+                                member_position.getZ() - state_position.getZ());
                         if (delta.dot(iter.state.motionVector()) < 0.0) {
                             continue;
                         }
@@ -596,7 +612,7 @@ public class ObstacleTracker implements TrainStatusProvider {
                     // Compute distance from the current rail position to the 'edge' of the minecart.
                     // This is basically the distance to center, with half the length of the minecart subtracted.
                     double distanceToMember = member_position.distance(state_position) -
-                                              (double) member.getEntity().getWidth() * 0.5;
+                            (double) member.getEntity().getWidth() * 0.5;
 
                     // Movement speed of the minecart, taking maximum speed into account
                     Vector member_velocity = member.getEntity().getVelocity();
@@ -638,14 +654,14 @@ public class ObstacleTracker implements TrainStatusProvider {
                     IntVector3 currBlockPos = iter.state.positionOfflineBlock().getPosition();
                     if (!currentMutex.containsBlock(currBlockPos)) {
                         MutexZoneCacheWorld.MutexZoneResult otherMutex = mutexZones.get(iter);
-                        if (otherMutex == null || otherMutex.zone.slot != currentMutex.slot) {
+                        if (otherMutex == null || otherMutex.zone().slot != currentMutex.slot) {
                             break;
                         }
 
                         // Resume
-                        currentMutex = otherMutex.zone;
+                        currentMutex = otherMutex.zone();
                         currentMutexSpacing = currentMutex.getSpacing(group);
-                        otherMutex.zone.onUsed(group);
+                        otherMutex.zone().onUsed(group);
                     }
 
                     // Update
@@ -667,8 +683,8 @@ public class ObstacleTracker implements TrainStatusProvider {
         private boolean updateCurrentMutex(TrackWalkingPoint iter) {
             MutexZoneSlot.EnterResult result;
             result = currentMutexGroup.enter(currentMutex.type,                      /* Mutex zone slot type */
-                                             iter.state.railPiece().blockPosition(), /* Rail block */
-                                             currentMutexHard);                      /* Really needs to enter it */
+                    iter.state.railPiece().blockPosition(), /* Rail block */
+                    currentMutexHard);                      /* Really needs to enter it */
 
             // Track mutex zones we have entered or are approaching (train status!)
             if (!enteredMutexZones.contains(currentMutex)) {
@@ -809,7 +825,7 @@ public class ObstacleTracker implements TrainStatusProvider {
 
             // Reduce the number of ticks of deceleration we got until traveled distance <= threshold
             // It's not pretty, but this while will probably only loop once or twice.
-            while ((((numSlowdownTicks+1) * numSlowdownTicks) * 0.5 * deceleration) > this.distance) {
+            while ((((numSlowdownTicks + 1) * numSlowdownTicks) * 0.5 * deceleration) > this.distance) {
                 numSlowdownTicks--;
             }
 
@@ -830,9 +846,13 @@ public class ObstacleTracker implements TrainStatusProvider {
      * Another train obstacle
      */
     public static class TrainObstacle extends Obstacle {
-        /** The full distance, which includes the distance to keep between the trains */
+        /**
+         * The full distance, which includes the distance to keep between the trains
+         */
         public final double fullDistance;
-        /** The first Member encountered of the train */
+        /**
+         * The first Member encountered of the train
+         */
         public final MinecartMember<?> member;
 
         public TrainObstacle(double fullDistance, double spaceDistance, double speed, MinecartMember<?> member) {

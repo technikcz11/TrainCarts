@@ -22,7 +22,7 @@ import java.util.*;
 
 public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
     private static final long serialVersionUID = 1;
-    protected static ImplicitlySharedSet<MinecartGroup> groups = new ImplicitlySharedSet<MinecartGroup>();
+    protected static ImplicitlySharedSet<MinecartGroup> groups = new ImplicitlySharedSet<>();
     protected static boolean hasPhysicsChanges = false;
     private static long lastMaxPerWorldLogTimestamp = 0;
 
@@ -33,9 +33,9 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
      * @param plugin Main TrainCarts plugin instance initiating this
      */
     public static void doFixedTick(TrainCarts plugin) {
-        try (ImplicitlySharedSet<MinecartGroup> groups_copy = groups.clone()) {
+//        try (ImplicitlySharedSet<MinecartGroup> groups_copy = groups.clone()) {
             try {
-                for (MinecartGroup group : groups_copy) {
+                for (MinecartGroup group : groups.cloneAsIterable()) {
                     // Tick the train
                     group.doPhysics(plugin);
 
@@ -49,7 +49,7 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
             } catch (Throwable t) {
                 plugin.handle(t);
             }
-        }
+//        }
     }
 
     /**
@@ -57,9 +57,9 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
      * This ensures minecart entities are moved to the correct chunk they are in.
      */
     public static void doPostMoveLogic() {
-        try (ImplicitlySharedSet<MinecartGroup> groups_copy = groups.clone()) {
+//        try (ImplicitlySharedSet<MinecartGroup> groups_copy = groups.clone()) {
             try {
-                for (MinecartGroup group : groups_copy) {
+                for (MinecartGroup group : groups) {
                     for (MinecartMember<?> m : group) {
                         m.getEntity().doPostTick();
                     }
@@ -67,19 +67,23 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
             } catch (Throwable t) {
                 TrainCarts.plugin.handle(t);
             }
-        }
+//        }
     }
 
-    public static MinecartGroup create(MinecartMember<?>... members) {
+    public static MinecartGroup create(List<MinecartMember<?>> members) {
         return create(null, members);
     }
 
-    public static MinecartGroup create(String name, MinecartMember<?>... members) {
+    public static MinecartGroup create(MinecartMember<?> member) {
+        return create(null, Collections.singletonList(member));
+    }
+
+    public static MinecartGroup create(String name, List<MinecartMember<?>> members) {
         Util.checkMainThread("MinecartGroupStore::create(name, members)");
         validateMembersArray(members);
 
         // There is not a group with this name already?
-        MinecartGroup g = new MinecartGroup(members[0].getTrainCarts());
+        MinecartGroup g = new MinecartGroup(members.get(0).getTrainCarts());
         if (name != null) {
             g.setProperties(TrainPropertiesStore.create(name));
         }
@@ -91,30 +95,34 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
      * Creates a new group that recently split from another group. The properties of the
      * original group are applied to the newly created group. The name is based off of
      * the original group's. name.
-     * 
+     *
      * @param properties The properties to clone and base a split name off of
      * @param members The members of the new group
      * @return new group
      */
-    public static MinecartGroup createSplitFrom(TrainProperties properties, MinecartMember<?>... members) {
+    public static MinecartGroup createSplitFrom(TrainProperties properties, List<MinecartMember<?>> members) {
         Util.checkMainThread("MinecartGroupStore::createSplitFrom(from, members)");
         validateMembersArray(members);
 
         // Create new group and assign it the properties of a split group
-        MinecartGroup g = new MinecartGroup(members[0].getTrainCarts());
+        MinecartGroup g = new MinecartGroup(members.getFirst().getTrainCarts());
         g.setProperties(TrainPropertiesStore.createSplitFrom(properties));
         addMembersAndFinalize(g, members);
         g.getSignTracker().refresh();
         return g;
     }
 
-    private static void validateMembersArray(MinecartMember<?>[] members) {
-        final int numMembers = members.length;
+    public static MinecartGroup createSplitFrom(TrainProperties properties, MinecartMember<?> member) {
+        return createSplitFrom(properties, Collections.singletonList(member));
+    }
+
+    private static void validateMembersArray(List<MinecartMember<?>> members) {
+        final int numMembers = members.size();
         if (numMembers == 0) {
             throw new IllegalArgumentException("Members array is empty, can't create a train with zero carts");
         }
         for (int i = 0; i < numMembers; i++) {
-            MinecartMember<?> member = members[i];
+            MinecartMember<?> member = members.get(i);
             if (member == null) {
                 throw new IllegalArgumentException("Member at index " + i + " of members array is null");
             } else if (member.getEntity() == null) {
@@ -129,7 +137,7 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
         }
     }
 
-    private static void addMembersAndFinalize(MinecartGroup group, MinecartMember<?>... members) {
+    private static void addMembersAndFinalize(MinecartGroup group, List<MinecartMember<?>> members) {
         for (MinecartMember<?> member : members) {
             member.setUnloaded(false);
             group.add(member);
@@ -279,7 +287,7 @@ public class MinecartGroupStore extends ArrayList<MinecartMember<?>> {
     /**
      * Gets a set containing all the minecart groups on the server.
      * When trains could be created while iterating, clone the set first.
-     * 
+     *
      * @return shared set of all the groups on the server
      */
     public static ImplicitlySharedSet<MinecartGroup> getGroups() {

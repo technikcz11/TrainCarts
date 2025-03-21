@@ -1,13 +1,10 @@
 package com.bergerkiller.bukkit.tc.signactions;
 
+import com.bergerkiller.bukkit.common.bases.CheckedRunnable;
 import com.bergerkiller.bukkit.common.collections.BlockMap;
 import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.utils.LogicUtil;
-import com.bergerkiller.bukkit.tc.Direction;
-import com.bergerkiller.bukkit.tc.DirectionStatement;
-import com.bergerkiller.bukkit.tc.Localization;
-import com.bergerkiller.bukkit.tc.Permission;
-import com.bergerkiller.bukkit.tc.TCConfig;
+import com.bergerkiller.bukkit.tc.*;
 import com.bergerkiller.bukkit.tc.actions.GroupActionWaitPathFinding;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
@@ -17,23 +14,13 @@ import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
 import com.bergerkiller.bukkit.tc.events.MissingPathConnectionEvent;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
 import com.bergerkiller.bukkit.tc.events.SignChangeActionEvent;
-import com.bergerkiller.bukkit.tc.pathfinding.PathConnection;
-import com.bergerkiller.bukkit.tc.pathfinding.PathNavigateEvent;
-import com.bergerkiller.bukkit.tc.pathfinding.PathNode;
-import com.bergerkiller.bukkit.tc.pathfinding.PathPredictEvent;
-import com.bergerkiller.bukkit.tc.pathfinding.SignRoutingEvent;
+import com.bergerkiller.bukkit.tc.pathfinding.*;
 import com.bergerkiller.bukkit.tc.properties.IProperties;
 import com.bergerkiller.bukkit.tc.statements.Statement;
 import com.bergerkiller.bukkit.tc.utils.SignBuildOptions;
-
 import org.bukkit.block.Block;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public class SignActionSwitcher extends SignAction {
     private BlockMap<CounterState> switchedTimes = new BlockMap<>();
@@ -168,16 +155,15 @@ public class SignActionSwitcher extends SignAction {
             this.info = info;
             this.statements = parseDirectionStatements(info);
 
-            {
-                boolean calcHasFromDirections = false;
-                for (DirectionStatement statement : statements) {
-                    if (!statement.isSwitchedFromSelf() && !statement.isDefault()) {
-                        calcHasFromDirections = true;
-                        break;
-                    }
+            boolean calcHasFromDirections = false;
+            for (DirectionStatement statement : statements) {
+                if (!statement.isSwitchedFromSelf() && !statement.isDefault()) {
+                    calcHasFromDirections = true;
+                    break;
                 }
-                this.hasFromDirections = calcHasFromDirections;
             }
+
+            this.hasFromDirections = calcHasFromDirections;
 
             // Whether to update the switcher (lever) state
             this.doTrain = info.isTrainSign() && info.isAction(SignActionType.GROUP_ENTER, SignActionType.GROUP_UPDATE);
@@ -395,7 +381,7 @@ public class SignActionSwitcher extends SignAction {
                                 Localization.PATHING_FAILED.broadcast(info.getGroup(), destination);
                             }
                         }
-                        
+
                         // Successfully handled, don't switch the track!
                         return true;
                     }
@@ -592,9 +578,9 @@ public class SignActionSwitcher extends SignAction {
                     addAll(group);
                     if (railPiece != RailPiece.NONE) {
                         railPiece.members().stream()
-                            .map(MinecartMember::getGroup)
-                            .distinct()
-                            .forEach(this::addAll);
+                                .map(MinecartMember::getGroup)
+                                .distinct()
+                                .forEach(this::addAll);
                     }
                 }
             }

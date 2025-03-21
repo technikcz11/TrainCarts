@@ -434,7 +434,7 @@ public class TrackWalkingPoint {
     }
 
     private boolean isDerailed() {
-        return this.state.railType() == RailType.NONE || this.currentRailPath.isEmpty();
+        return state.railType() == RailType.NONE || currentRailPath.isEmpty();
     }
 
     private boolean isMovementAborted() {
@@ -444,11 +444,7 @@ public class TrackWalkingPoint {
 
         // If navigator is installed and halted it, fail
         NavigatorWithEvent<?> navigator = this.navigator;
-        if (navigator != null && navigator.event.isNavigationAborted()) {
-            return true;
-        }
-
-        return false;
+        return navigator != null && navigator.event.isNavigationAborted();
     }
 
     /**
@@ -584,6 +580,7 @@ public class TrackWalkingPoint {
 
             // Process active block predictors. Remove when they return false, or distance is beyond the max.
             boolean predictorsRemoved = false;
+
             for (Iterator<BlockPredictor> iter = activeBlockPredictors.iterator(); iter.hasNext();) {
                 BlockPredictor blockPredictor = iter.next();
                 if (!blockPredictor.handler.update(event, currentDistance - blockPredictor.startDistance)

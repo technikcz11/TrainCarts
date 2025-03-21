@@ -1,25 +1,5 @@
 package com.bergerkiller.bukkit.tc.rails;
 
-import static com.bergerkiller.bukkit.common.utils.MaterialUtil.getMaterial;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
-import java.util.logging.Level;
-
-import org.bukkit.Material;
-import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-
 import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.offline.OfflineBlock;
 import com.bergerkiller.bukkit.common.offline.OfflineWorld;
@@ -38,6 +18,17 @@ import com.bergerkiller.bukkit.tc.rails.RailLookup.TrackedSign;
 import com.bergerkiller.bukkit.tc.rails.type.RailType;
 import com.bergerkiller.bukkit.tc.signactions.mutex.MutexZoneCache;
 import com.bergerkiller.bukkit.tc.signactions.mutex.MutexZoneCacheWorld;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+
+import java.util.*;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.logging.Level;
+
+import static com.bergerkiller.bukkit.common.utils.MaterialUtil.getMaterial;
 
 /**
  * Retrieves and caches rails and information about rails, mapped to
@@ -68,16 +59,16 @@ final class WorldRailLookupImpl implements WorldRailLookup {
 
     private static final Material WALL_SIGN_TYPE = getMaterial("LEGACY_WALL_SIGN");
     private static final Material SIGN_POST_TYPE = getMaterial("LEGACY_SIGN_POST");
-    private static BlockFace[] SIGN_FACES_ORDERED = {BlockFace.UP, BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST, BlockFace.DOWN};
+    private static final BlockFace[] SIGN_FACES_ORDERED = {BlockFace.UP, BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST, BlockFace.DOWN};
 
     // Per-world data
     private final TrainCarts traincarts;
     private World world;
-    private OfflineWorld offlineWorld;
+    private final OfflineWorld offlineWorld;
     private Map<IntVector3, Bucket> cache;
     private List<Bucket> cacheValues;
-    private MutexZoneCacheWorld mutexZones;
-    private SignControllerWorld signController;
+    private final MutexZoneCacheWorld mutexZones;
+    private final SignControllerWorld signController;
     private int ticksWithEmptyCache;
 
     WorldRailLookupImpl(TrainCarts traincarts, World world) {
@@ -161,7 +152,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
      */
     void close() {
         if (!cache.isEmpty()) {
-            forAllBuckets(b -> b.rail_life = RailLookup.LIFE_TIMER_DELETED);
+            forAllBuckets(b -> b.railLife = RailLookup.LIFE_TIMER_DELETED);
             cache.clear();
             cacheValues.clear();
         }
@@ -174,18 +165,19 @@ final class WorldRailLookupImpl implements WorldRailLookup {
     public RailPiece[] findAtStatePosition(RailState state) {
         IntVector3 coordinates;
         {
-            RailPath.Position pos = state.position();
-            if (pos.relative) {
-                // This is practically not used!
+        RailPath.Position pos = state.position();
+        if (pos.relative) {
+            // This is practically not used!
                 coordinates = state.railPiece().blockPosition().add(MathUtil.floor(pos.posX),
-                                                                    MathUtil.floor(pos.posY),
+                    MathUtil.floor(pos.posY),
                                                                     MathUtil.floor(pos.posZ));
-            } else {
+        } else {
                 coordinates = new IntVector3(MathUtil.floor(pos.posX),
-                                             MathUtil.floor(pos.posY),
+                    MathUtil.floor(pos.posY),
                                              MathUtil.floor(pos.posZ));
             }
         }
+
 
         // If already in the cache, compute/return it right-away
         // During computation the original bucket may get deleted (if rail type was NONE)
@@ -252,10 +244,11 @@ final class WorldRailLookupImpl implements WorldRailLookup {
             return Collections.singletonList(inCache);
         } else {
             List<RailLookup.CachedRailPiece> result = new ArrayList<>(5);
-            result.add(inCache);
-            while ((inCache = inCache.next) != null) {
+
+            do {
                 result.add(inCache);
-            }
+            } while ((inCache = inCache.next) != null);
+
             return result;
         }
     }
@@ -432,9 +425,9 @@ final class WorldRailLookupImpl implements WorldRailLookup {
         // Delete all buckets from memory that we can get away with
         refreshBuckets(bucket -> {
             // Delete this at all times
-            bucket.rail_life = RailLookup.LIFE_TIMER_START;
-            bucket.rails_at_position_life = RailLookup.LIFE_TIMER_DELETED;
-            bucket.rails_at_position = NO_RAILS_AT_POSITION;
+            bucket.railLife = RailLookup.LIFE_TIMER_START;
+            bucket.railsAtPositionLife = RailLookup.LIFE_TIMER_DELETED;
+            bucket.railsAtPosition = NO_RAILS_AT_POSITION;
             bucket.signs = RailLookup.MISSING_RAILS_NO_SIGNS;
             return false;
         }, false);
@@ -454,7 +447,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
                 // If bucket has a next value, put that one in instead. Remove if all dead.
                 IntVector3 cacheKey = createCacheKey(bucket.blockPosition());
                 while (true) {
-                    bucket.rail_life = RailLookup.LIFE_TIMER_DELETED;
+                    bucket.railLife = RailLookup.LIFE_TIMER_DELETED;
                     bucket = bucket.next;
                     if (bucket == null) {
                         // No more buckets, remove entirely
@@ -504,7 +497,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
         Bucket bucket = this.cache.get(cacheKey);
         if (bucket == null) {
             bucket = new Bucket(this.offlineWorld.getBlockAt(coordinates),
-                                 BlockUtil.getBlock(this.world, coordinates));
+                    BlockUtil.getBlock(this.world, coordinates));
             this.cache.put(cacheKey, bucket);
             this.cacheValues.add(bucket);
         }
@@ -532,56 +525,56 @@ final class WorldRailLookupImpl implements WorldRailLookup {
         }
 
         /* Timings: findRailInfo  (Rail Type Cache) */
-        {
-            for (RailType type : RailType.values()) {
-                try {
-                    List<Block> rails = type.findRails(positionBlock);
-                    if (!rails.isEmpty()) {
-                        // During this we might end up deleting 'ourselves' if the rail type of this bucket is NONE,
-                        // and a rail is found with the same block position as ourselves.
-                        Bucket bucketInCache = null;
 
-                        // Fill this array with the found buckets
+        for (RailType type : RailType.values()) {
+            try {
+                List<Block> rails = type.findRails(positionBlock);
+                if (!rails.isEmpty()) {
+                    // During this we might end up deleting 'ourselves' if the rail type of this bucket is NONE,
+                    // and a rail is found with the same block position as ourselves.
+                    Bucket bucketInCache = null;
+
+                    // Fill this array with the found buckets
                         Bucket[] newRailsAtPosition = new Bucket[rails.size()];
                         int index = 0;
 
-                        for (Block railsBlock : rails) {
-                            if (railsBlock.getX() == positionBlock.getX() &&
+                    for (Block railsBlock : rails) {
+                        if (railsBlock.getX() == positionBlock.getX() &&
                                 railsBlock.getY() == positionBlock.getY() &&
                                 railsBlock.getZ() == positionBlock.getZ())
                             {
-                                // As the bucket for this type is being calculated, it's never going to find more
-                                // than one type here, so this is safe.
-                                bucketInCache = new Bucket(positionOfflineBlock, positionBlock, type);
+                            // As the bucket for this type is being calculated, it's never going to find more
+                            // than one type here, so this is safe.
+                            bucketInCache = new Bucket(positionOfflineBlock, positionBlock, type);
                                 newRailsAtPosition[index++] = bucketInCache;
                             }
                             else
                             {
-                                // Need to look it up in the cache. This bucket won't get replaced.
-                                OfflineBlock railsOfflineBlock = offlineWorld.getBlockAt(railsBlock.getX(), railsBlock.getY(), railsBlock.getZ());
+                            // Need to look it up in the cache. This bucket won't get replaced.
+                            OfflineBlock railsOfflineBlock = offlineWorld.getBlockAt(railsBlock.getX(), railsBlock.getY(), railsBlock.getZ());
                                 newRailsAtPosition[index++] = lookupRailBucket(railsOfflineBlock, railsBlock, type);
-                            }
                         }
-
-                        // If block itself isn't a rail then we must initialize it as NONE initially
-                        if (bucketInCache == null) {
-                            bucketInCache = new Bucket(positionOfflineBlock, positionBlock);
-                        }
-
-                        // Put it in the cache
-                        addToCache(cacheKey, bucketInCache);
-                        bucketInCache.rails_at_position = newRailsAtPosition;
-
-                        // Compute signs now that bucket is registered
-                        bucketInCache.signs = RailLookup.discoverSignsAtRailPiece(bucketInCache);
-
-                        return newRailsAtPosition;
                     }
-                } catch (Throwable t) {
-                    RailType.handleCriticalError(type, t);
+
+                    // If block itself isn't a rail then we must initialize it as NONE initially
+                    if (bucketInCache == null) {
+                        bucketInCache = new Bucket(positionOfflineBlock, positionBlock);
+                    }
+
+                    // Put it in the cache
+                    addToCache(cacheKey, bucketInCache);
+                        bucketInCache.railsAtPosition = newRailsAtPosition;
+
+                    // Compute signs now that bucket is registered
+                    bucketInCache.signs = RailLookup.discoverSignsAtRailPiece(bucketInCache);
+
+                    return newRailsAtPosition;
                 }
+            } catch (Throwable t) {
+                RailType.handleCriticalError(type, t);
             }
         }
+
 
         // When no rails are found, the array is the NO_RAILS_AT_POSITION array. This will trigger another
         // lookup for rails the next tick.
@@ -633,7 +626,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
          * On first access, revalidates the information. If set to 0, the bucket
          * was removed from the cache.
          */
-        public int rail_life;
+        public int railLife;
 
         /**
          * Tick counter set to the lifeTimer every time this bucket's rail-at-position info
@@ -641,7 +634,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
          * Is not set to 0 when the bucket is removed, since getting this bucket requires
          * retrieving from the cache in the first place.
          */
-        public int rails_at_position_life;
+        public int railsAtPositionLife;
 
         /**
          * Stores the rail pieces accessed when this bucket is treated as the Block
@@ -649,7 +642,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
          * Bucket of it's own with the rail piece information, such as signs and
          * members on the rail.
          */
-        public Bucket[] rails_at_position;
+        public Bucket[] railsAtPosition;
 
         // Initializes a new Bucket for a non-rail use, with RailType NONE
         // This is used when using a block position to find rails that have minecarts near it
@@ -664,9 +657,9 @@ final class WorldRailLookupImpl implements WorldRailLookup {
         public Bucket(OfflineBlock offlineBlock, Block block, RailType type) {
             super(WorldRailLookupImpl.this, offlineBlock, block, type);
             this.signs = RailLookup.MISSING_RAILS_NO_SIGNS;
-            this.rail_life = RailLookup.lifeTimer;
-            this.rails_at_position_life = 0; // Needs to be calculated
-            this.rails_at_position = NO_RAILS_AT_POSITION;
+            this.railLife = RailLookup.lifeTimer;
+            this.railsAtPositionLife = 0; // Needs to be calculated
+            this.railsAtPosition = NO_RAILS_AT_POSITION;
         }
 
         /**
@@ -680,7 +673,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
         public boolean checkStillValid(int timeoutTicks) {
             // If accessed recently, then it can be kept. Even if members are around that should be
             // unloaded, presumably, such an unloaded member wouldn't keep accessing it.
-            if (this.rail_life >= timeoutTicks || this.rails_at_position_life >= timeoutTicks) {
+            if (this.railLife >= timeoutTicks || this.railsAtPositionLife >= timeoutTicks) {
                 return true;
             }
 
@@ -694,7 +687,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
                     if (member.isUnloaded() || member.getEntity().isRemoved()) {
                         iter.remove();
                         traincarts.log(Level.WARNING, "Purged unloaded minecart from rail cache at " +
-                                    offlineBlock().getPosition());
+                                offlineBlock().getPosition());
                     }
                 }
             }
@@ -717,11 +710,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
             }
 
             // At least one bucket at the Block must exist that preserves the detector regions
-            if (isOnlyBucketAtBlock && this.detectorRegions != RailLookup.NO_DETECTOR_REGIONS) {
-                return false;
-            }
-
-            return true;
+            return !isOnlyBucketAtBlock || this.detectorRegions == RailLookup.NO_DETECTOR_REGIONS;
         }
 
         /**
@@ -734,10 +723,10 @@ final class WorldRailLookupImpl implements WorldRailLookup {
          */
         public Bucket swapOutNoneType(RailType railType) {
             Bucket newBucket = this.cloneAsType(railType);
-            newBucket.rails_at_position = this.rails_at_position;
+            newBucket.railsAtPosition = this.railsAtPosition;
             if (this.members.isEmpty()) {
                 // Delete the previous bucket, it's unlikely to be used again.
-                this.rail_life = 0;
+                this.railLife = 0;
             } else {
                 // We can't do this if there are members stored, as those would get out of sync if
                 // we remove the bucket. Put the NONE one as the second bucket to avoid problems.
@@ -747,7 +736,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
             // Replace or add to cache values mapping
             {
                 boolean found = false;
-                for (ListIterator<Bucket> iter = cacheValues.listIterator(); iter.hasNext();) {
+                for (ListIterator<Bucket> iter = cacheValues.listIterator(); iter.hasNext(); ) {
                     if (iter.next() == this) {
                         iter.set(newBucket);
                         found = true;
@@ -805,7 +794,7 @@ final class WorldRailLookupImpl implements WorldRailLookup {
                 if (validChecker.test(next) || (!ignoreCanBePurged && !next.canBePurged(false))) {
                     curr = next;
                 } else {
-                    next.rail_life = 0;
+                    next.railLife = 0;
                     curr.next = next.next;
                 }
             }
@@ -818,21 +807,31 @@ final class WorldRailLookupImpl implements WorldRailLookup {
          */
         public Bucket[] getRailsAtPosition() {
             int lifeTimerAtPosition = RailLookup.lifeTimerAtPosition;
-            if (this.rails_at_position_life >= lifeTimerAtPosition) {
-                return this.rails_at_position;
+            if (this.railsAtPositionLife >= lifeTimerAtPosition) {
+                return this.railsAtPosition;
             }
-            this.rails_at_position_life = lifeTimerAtPosition;
+            this.railsAtPositionLife = lifeTimerAtPosition;
 
             // Verify still valid, if still valid, return as-is
-            Bucket[] currAtPosition = this.rails_at_position;
+            Bucket[] currAtPosition = this.railsAtPosition;
             if (currAtPosition.length == 0) {
                 return computeRailsAtPosition();
             } else {
+                //TODO: optimizations
+                // boolean nonVerifiable = currAtPosition
+                //         .parallelStream()
+                //         .anyMatch(b -> !b.verify());
+
+                // if (nonVerifiable) {
+                //     return computeRailsAtPosition();
+                // }
+
                 for (Bucket b : currAtPosition) {
                     if (!b.verify()) {
                         return computeRailsAtPosition();
                     }
                 }
+
                 return currAtPosition;
             }
         }
@@ -865,58 +864,57 @@ final class WorldRailLookupImpl implements WorldRailLookup {
             Bucket bucketInCache = this;
 
             /* Timings: findRailInfo  (Rail Type Cache) */
-            {
-                for (RailType type : RailType.values()) {
-                    try {
-                        List<Block> rails = type.findRails(positionBlock);
-                        if (!rails.isEmpty()) {
-                            // During this we might end up deleting 'ourselves' if the rail type of this bucket is NONE,
-                            // and a rail is found with the same block position as ourselves.
-                            RailType bucketInCacheType = bucketInCache.type();
+            for (RailType type : RailType.values()) {
+                try {
+                    List<Block> rails = type.findRails(positionBlock);
+                    if (!rails.isEmpty()) {
+                        // During this we might end up deleting 'ourselves' if the rail type of this bucket is NONE,
+                        // and a rail is found with the same block position as ourselves.
+                        RailType bucketInCacheType = bucketInCache.type();
 
-                            // Fill this array with the found buckets
-                            int index = newRailsAtPosition.length;
+                        // Fill this array with the found buckets
+                        int index = newRailsAtPosition.length;
                             newRailsAtPosition = Arrays.copyOf(newRailsAtPosition, index + rails.size());
 
-                            for (Block railsBlock : rails) {
-                                if (railsBlock.getX() == positionBlock.getX() &&
+                        for (Block railsBlock : rails) {
+                            if (railsBlock.getX() == positionBlock.getX() &&
                                     railsBlock.getY() == positionBlock.getY() &&
                                     railsBlock.getZ() == positionBlock.getZ())
                                 {
-                                    // Rail can be found in the same bucket as we're already in
-                                    if (bucketInCacheType == type) {
-                                        // Self
-                                        newRailsAtPosition[index++] = bucketInCache;
-                                    } else if (bucketInCacheType == RailType.NONE) {
-                                        // Swap it out
-                                        bucketInCache = bucketInCache.swapOutNoneType(type);
-                                        bucketInCacheType = type;
-                                        newRailsAtPosition[index++] = bucketInCache;
-                                    } else {
-                                        // Append to chain, bucket in cache isn't changed
-                                        newRailsAtPosition[index++] = bucketInCache.findOrAppendToChain(type);
-                                    }
+                                // Rail can be found in the same bucket as we're already in
+                                if (bucketInCacheType == type) {
+                                    // Self
+                                    newRailsAtPosition[index++] = bucketInCache;
+                                } else if (bucketInCacheType == RailType.NONE) {
+                                    // Swap it out
+                                    bucketInCache = bucketInCache.swapOutNoneType(type);
+                                    bucketInCacheType = type;
+                                    newRailsAtPosition[index++] = bucketInCache;
+                                } else {
+                                    // Append to chain, bucket in cache isn't changed
+                                    newRailsAtPosition[index++] = bucketInCache.findOrAppendToChain(type);
+                                }
                                 }
                                 else
                                 {
-                                    // Need to look it up in the cache. This bucket won't get replaced.
-                                    OfflineBlock railsOfflineBlock = offlineWorld.getBlockAt(railsBlock.getX(), railsBlock.getY(), railsBlock.getZ());
-                                    newRailsAtPosition[index++] = lookupRailBucket(railsOfflineBlock, railsBlock, type);
-                                }
+                                // Need to look it up in the cache. This bucket won't get replaced.
+                                OfflineBlock railsOfflineBlock = offlineWorld.getBlockAt(railsBlock.getX(), railsBlock.getY(), railsBlock.getZ());
+                                newRailsAtPosition[index++] = lookupRailBucket(railsOfflineBlock, railsBlock, type);
                             }
                         }
-                    } catch (Throwable t) {
-                        RailType.handleCriticalError(type, t);
                     }
+                } catch (Throwable t) {
+                    RailType.handleCriticalError(type, t);
                 }
             }
 
-            return bucketInCache.rails_at_position = newRailsAtPosition;
+
+            return bucketInCache.railsAtPosition = newRailsAtPosition;
         }
 
         @Override
         public boolean verify() {
-            int currLife = this.rail_life;
+            int currLife = this.railLife;
             if (currLife >= RailLookup.lifeTimer) {
                 return true; // Accessed multiple times within the cache period
             }
@@ -934,12 +932,12 @@ final class WorldRailLookupImpl implements WorldRailLookup {
                 // This sadly will result in another cache lookup, but as it only occurs when rails
                 // go missing, it's not a big problem. We must return false so that during at-position
                 // lookup it will actually recompute.
-                this.rail_life = RailLookup.LIFE_TIMER_START;
+                this.railLife = RailLookup.LIFE_TIMER_START;
                 return false;
             }
 
             // Reset life timer on every access
-            this.rail_life = RailLookup.verifyTimer;
+            this.railLife = RailLookup.verifyTimer;
 
             // Verify all signs we computed previously are still there
             // This is MISSING_RAILS_NO_SIGNS if previously the rails didn't exist
@@ -963,12 +961,12 @@ final class WorldRailLookupImpl implements WorldRailLookup {
 
         @Override
         public boolean verifyExists() {
-            return this.rail_life != RailLookup.LIFE_TIMER_DELETED;
+            return this.railLife != RailLookup.LIFE_TIMER_DELETED;
         }
 
         @Override
         public void forceCacheVerification() {
-            this.rail_life = RailLookup.LIFE_TIMER_START;
+            this.railLife = RailLookup.LIFE_TIMER_START;
             this.signs = RailLookup.MISSING_RAILS_NO_SIGNS;
         }
     }

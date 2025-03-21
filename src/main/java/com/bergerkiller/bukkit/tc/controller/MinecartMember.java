@@ -1,82 +1,30 @@
 package com.bergerkiller.bukkit.tc.controller;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.bergerkiller.bukkit.common.controller.EntityPositionApplier;
-import org.bukkit.Chunk;
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.HumanEntity;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Minecart;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Vehicle;
-import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
-import org.bukkit.event.vehicle.VehicleDamageEvent;
-import org.bukkit.event.vehicle.VehicleDestroyEvent;
-import org.bukkit.event.vehicle.VehicleEntityCollisionEvent;
-import org.bukkit.event.vehicle.VehicleMoveEvent;
-import org.bukkit.event.vehicle.VehicleUpdateEvent;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.util.Vector;
-
 import com.bergerkiller.bukkit.common.ToggledState;
 import com.bergerkiller.bukkit.common.bases.ExtendedEntity;
 import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
 import com.bergerkiller.bukkit.common.controller.EntityController;
+import com.bergerkiller.bukkit.common.controller.EntityPositionApplier;
 import com.bergerkiller.bukkit.common.entity.type.CommonMinecart;
 import com.bergerkiller.bukkit.common.inventory.MergedInventory;
 import com.bergerkiller.bukkit.common.math.OrientedBoundingBox;
 import com.bergerkiller.bukkit.common.math.Quaternion;
 import com.bergerkiller.bukkit.common.resources.SoundEffect;
-import com.bergerkiller.bukkit.common.utils.BlockUtil;
-import com.bergerkiller.bukkit.common.utils.CommonUtil;
-import com.bergerkiller.bukkit.common.utils.EntityUtil;
-import com.bergerkiller.bukkit.common.utils.FaceUtil;
-import com.bergerkiller.bukkit.common.utils.MathUtil;
-import com.bergerkiller.bukkit.common.utils.WorldUtil;
+import com.bergerkiller.bukkit.common.utils.*;
 import com.bergerkiller.bukkit.common.wrappers.BlockData;
 import com.bergerkiller.bukkit.common.wrappers.DamageSource;
 import com.bergerkiller.bukkit.common.wrappers.HumanHand;
 import com.bergerkiller.bukkit.common.wrappers.MoveType;
-import com.bergerkiller.bukkit.tc.CollisionMode;
-import com.bergerkiller.bukkit.tc.TCConfig;
-import com.bergerkiller.bukkit.tc.TCListener;
-import com.bergerkiller.bukkit.tc.TCSeatChangeListener;
-import com.bergerkiller.bukkit.tc.TrainCarts;
-import com.bergerkiller.bukkit.tc.Util;
+import com.bergerkiller.bukkit.tc.*;
 import com.bergerkiller.bukkit.tc.attachments.animation.Animation;
 import com.bergerkiller.bukkit.tc.attachments.animation.AnimationOptions;
 import com.bergerkiller.bukkit.tc.attachments.api.Attachment;
 import com.bergerkiller.bukkit.tc.attachments.config.AttachmentModel;
 import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentSeat;
-import com.bergerkiller.bukkit.tc.controller.components.ActionTrackerMember;
-import com.bergerkiller.bukkit.tc.controller.components.AnimationController;
-import com.bergerkiller.bukkit.tc.controller.components.AttachmentControllerMember;
-import com.bergerkiller.bukkit.tc.controller.components.RailPath;
-import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
-import com.bergerkiller.bukkit.tc.controller.components.RailState;
+import com.bergerkiller.bukkit.tc.controller.components.*;
 import com.bergerkiller.bukkit.tc.controller.components.RailTracker.TrackedRail;
 import com.bergerkiller.bukkit.tc.controller.components.RailTracker.TrackedRailWalker;
-import com.bergerkiller.bukkit.tc.controller.components.RailTrackerMember;
-import com.bergerkiller.bukkit.tc.controller.components.SignTracker;
-import com.bergerkiller.bukkit.tc.controller.components.SignTrackerMember;
-import com.bergerkiller.bukkit.tc.controller.components.SoundLoop;
-import com.bergerkiller.bukkit.tc.controller.components.WheelTrackerMember;
 import com.bergerkiller.bukkit.tc.exception.GroupUnloadedException;
 import com.bergerkiller.bukkit.tc.exception.MemberMissingException;
 import com.bergerkiller.bukkit.tc.properties.CartProperties;
@@ -92,14 +40,25 @@ import com.bergerkiller.bukkit.tc.rails.logic.RailLogicVertical;
 import com.bergerkiller.bukkit.tc.rails.type.RailType;
 import com.bergerkiller.bukkit.tc.rails.type.RailTypeActivator;
 import com.bergerkiller.bukkit.tc.signactions.SignActionType;
-import com.bergerkiller.bukkit.tc.utils.ChunkArea;
-import com.bergerkiller.bukkit.tc.utils.Effect;
-import com.bergerkiller.bukkit.tc.utils.TrackIterator;
-import com.bergerkiller.bukkit.tc.utils.TrackMap;
-import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
+import com.bergerkiller.bukkit.tc.utils.*;
 import com.bergerkiller.generated.net.minecraft.world.entity.EntityHandle;
 import com.bergerkiller.generated.net.minecraft.world.entity.EntityLivingHandle;
 import com.bergerkiller.generated.net.minecraft.world.phys.AxisAlignedBBHandle;
+import org.bukkit.Chunk;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.*;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.vehicle.*;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.Vector;
+
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class MinecartMember<T extends CommonMinecart<?>> extends EntityController<T>
         implements IPropertiesHolder, AnimationController, TrainCarts.Provider {
@@ -174,6 +133,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // Can the minecart reach the other?
         boolean m1moving = m1.isMoving();
         boolean m2moving = m2.isMoving();
+
         if (m1moving && m2moving) {
             if (!m1.isFollowingOnTrack(m2) && !m2.isFollowingOnTrack(m1))
                 return false;
@@ -317,7 +277,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Called when a train is being saved, allowing this Minecart Member to include
      * additional data specific to the entity itself.
-     * 
+     *
      * @param data
      */
     @SuppressWarnings("deprecation")
@@ -341,7 +301,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Called when a train is being spawned, allowing this Minecart Member to load
      * additional data specific to the entity itself.
-     * 
+     *
      * @param data
      */
     @SuppressWarnings("deprecation")
@@ -363,7 +323,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Gets whether the orientation of the Minecart is inverted compared to the
      * movement direction.
-     * 
+     *
      * @return True if orientation is inverted
      */
     public boolean isOrientationInverted() {
@@ -374,7 +334,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Gets a normalized vector of the desired orientation of the Minecart. This is
      * the orientation the Minecart would have, if not flipped around, always
      * pointing into the movement direction.
-     * 
+     *
      * @return orientation
      */
     public Vector calculateOrientation() {
@@ -450,7 +410,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * yaw/pitch rotation angles of the Entity. To avoid gymbal lock, the Quaternion
      * is cached and returned for so long the yaw/pitch of the Entity is not
      * altered.
-     * 
+     *
      * @return orientation
      */
     public Quaternion getOrientation() {
@@ -472,7 +432,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Gets the forward direction vector of the orientation of the Minecart. See
      * also: {@link #getOrientation()}.
-     * 
+     *
      * @return forward orientation vector
      */
     public Vector getOrientationForward() {
@@ -484,7 +444,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Sets the orientation of the Minecart. This is the direction vector of the
      * 'front' of the Minecart model. The orientation is automatically synchronized
      * from/to the yaw/pitch rotation angles of the Entity.
-     * 
+     *
      * @param orientation
      */
     public void setOrientation(Quaternion orientation) {
@@ -535,22 +495,22 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         return null;
     }
 
-    public MinecartMember<?>[] getNeightbours() {
+    public List<MinecartMember<?>> getNeightbours() {
         if (this.getGroup() == null)
-            return new MinecartMember<?>[0];
+            return Collections.emptyList();
         int index = this.getIndex();
         if (index == -1)
-            return new MinecartMember<?>[0];
+            return Collections.emptyList();
         if (index > 0) {
             if (index < this.getGroup().size() - 1) {
-                return new MinecartMember<?>[] { this.getGroup().get(index - 1), this.getGroup().get(index + 1) };
+                return List.of(this.getGroup().get(index - 1), this.getGroup().get(index + 1));
             } else {
-                return new MinecartMember<?>[] { this.getGroup().get(index - 1) };
+                return Collections.singletonList(this.getGroup().get(index - 1));
             }
         } else if (index < this.getGroup().size() - 1) {
-            return new MinecartMember<?>[] { this.getGroup().get(index + 1) };
+            return Collections.singletonList(this.getGroup().get(index + 1));
         } else {
-            return new MinecartMember<?>[0];
+            return Collections.emptyList();
         }
     }
 
@@ -575,7 +535,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Sets whether this Minecart is unloaded. An unloaded minecart can not move and
      * can not be part of a group. Minecarts that are set unloaded will have all
      * standard behavior frozen until they are loaded again.
-     * 
+     *
      * @param unloaded to set to
      */
     public void setUnloaded(boolean unloaded) {
@@ -610,7 +570,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Calculates the distance traveled by this Minecart on a block, relative to a
      * movement direction. This is used for the adjustment from block distances to
      * cart distances
-     * 
+     *
      * @return block moved sub-distance
      */
     public double calcSubBlockDistance() {
@@ -630,7 +590,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
     /**
      * Checks whether passengers of this Minecart take damage
-     * 
+     *
      * @param cause of the damage
      * @return True if damage is allowed
      */
@@ -642,17 +602,13 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // Suffocation damage presently only occurs from blocks above because of Vanilla
         // behavior
         // If this Minecart does not suffocate at all, cancel this event
-        if (cause == DamageCause.SUFFOCATION && !this.isPassengerSuffocating(passenger)) {
-            return false;
-        }
-
-        return true;
+        return cause != DamageCause.SUFFOCATION || this.isPassengerSuffocating(passenger);
     }
 
     /**
      * Checks whether a passenger of this Minecart is stuck inside a block, and
      * therefore will be suffocating.
-     * 
+     *
      * @param passenger to check
      * @return True if suffocating
      */
@@ -675,7 +631,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Gets the absolute world coordinates and orientation a passenger exiting this Minecart
      * will have. If the passenger Entity is not a passenger, then a default exit
      * offset is assumed.
-     * 
+     *
      * @param passenger
      * @return passenger eject position
      */
@@ -696,7 +652,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
     /**
      * Gets the absolute world coordinates and orientation of a passenger of this Minecart.
-     * 
+     *
      * @param passenger
      * @return passenger position
      */
@@ -755,7 +711,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
     /**
      * Gets a Block relative to the current rail, offset by the notchOffset
-     * 
+     *
      * @param notchOffset to offset by
      * @return relative block at this notch offset
      */
@@ -778,7 +734,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Gets the real speed of the minecart, keeping the
      * {@link MinecartGroup#getUpdateSpeedFactor()} into account. The speed is the
      * length of the velocity vector.
-     * 
+     *
      * @return real speed
      */
     public double getRealSpeed() {
@@ -792,7 +748,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Gets the real speed of the minecart, like {@link #getRealSpeed()}, but limits
      * it to the maximum speed set for the train.
-     * 
+     *
      * @return real speed, limited by max speed
      */
     public double getRealSpeedLimited() {
@@ -1033,7 +989,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Looks at the current position information and attempts to discover any rails
      * at these positions. The movement of the minecart is taken into account. If
      * derailed, the rail type of the state is set to NONE.
-     * 
+     *
      * @return rail state
      */
     public RailState discoverRail() {
@@ -1076,7 +1032,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Snaps the minecart onto a rail path, preserving the movement direction.
      * Can be used in rail logic pre/post-move to adjust and correct
      * position on the path.
-     * 
+     *
      * @param path The path to snap this member onto
      */
     public void snapToPath(RailPath path) {
@@ -1105,8 +1061,8 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         }
         entity.setPosition(position.posX, position.posY, position.posZ);
         entity.vel.set(position.motX * velocity,
-                       position.motY * velocity,
-                       position.motZ * velocity);
+                position.motY * velocity,
+                position.motZ * velocity);
     }
 
     /*
@@ -1130,8 +1086,8 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * is currently railed.
      *
      * @return First known position after derailing. May not be the actual position
-     *         if the train unloaded or reloaded after a server restart.
-     *         Is <i>null</i> if this member is currently railed.
+     * if the train unloaded or reloaded after a server restart.
+     * Is <i>null</i> if this member is currently railed.
      */
     public Location getFirstKnownDerailedPosition() {
         return this.firstKnownDerailedPosition;
@@ -1241,10 +1197,8 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
             if (TrackIterator.isConnected(this.getBlock(), memberrail, true)) {
                 return true;
             }
-        } else {
-            if (TrackIterator.isConnected(this.getBlock(), memberrail, false)) {
-                return true;
-            }
+        } else if (TrackIterator.isConnected(this.getBlock(), memberrail, false)) {
+            return true;
         }
 
         return false;
@@ -1329,9 +1283,8 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // Remember the original direction (flip it) when the train is not moving
         RailState state = tracker.getState();
         if (this.direction == null ||
-            this.entity.vel.lengthSquared() > 1e-10 ||
-            state.position().motDot(this.direction) >= 0.0)
-        {
+                this.entity.vel.lengthSquared() > 1e-10 ||
+                state.position().motDot(this.direction) >= 0.0) {
             this.direction = state.position().getMotionFaceWithSubCardinal();
         } else {
             this.direction = state.position().getMotionFaceWithSubCardinal().getOppositeFace();
@@ -1644,7 +1597,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Checks whether the bounding box of another Entity is intersecting with this
      * minecart's 3d model bounding box
-     * 
+     *
      * @param entity
      * @return True if intersecting
      */
@@ -1667,9 +1620,9 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // We lack a proper bounding box collision test
         // Instead we do a poor man's method of probing various points on the entity
         AxisAlignedBBHandle aabb = entityHandle.getBoundingBox();
-        double[] xval = { aabb.getMinX(), 0.5 * (aabb.getMinX() + aabb.getMaxX()), aabb.getMaxX() };
-        double[] yval = { aabb.getMinY(), 0.5 * (aabb.getMinY() + aabb.getMaxY()), aabb.getMaxY() };
-        double[] zval = { aabb.getMinZ(), 0.5 * (aabb.getMinZ() + aabb.getMaxZ()), aabb.getMaxZ() };
+        double[] xval = {aabb.getMinX(), 0.5 * (aabb.getMinX() + aabb.getMaxX()), aabb.getMaxX()};
+        double[] yval = {aabb.getMinY(), 0.5 * (aabb.getMinY() + aabb.getMaxY()), aabb.getMaxY()};
+        double[] zval = {aabb.getMinZ(), 0.5 * (aabb.getMinZ() + aabb.getMaxZ()), aabb.getMaxZ()};
         for (double x : xval) {
             for (double y : yval) {
                 for (double z : zval) {
@@ -1689,7 +1642,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Calculates the distance between a point and this minecart's 3d model shape.
      * The position as controlled by the wheels is used for this.
-     * 
+     *
      * @param point
      * @return distance
      */
@@ -1723,7 +1676,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * the rails are walked to calculate the distance that way.
      *
      * @return Distance between this member and the member ahead.
-     *         Returns NaN if no valid path can be detected or either member is derailed.
+     * Returns NaN if no valid path can be detected or either member is derailed.
      */
     public double calculateRailDistanceToMemberAhead(MinecartMember<?> memberAhead) {
         // If either is derailed, just use the as-the-crow-flies distance
@@ -1850,7 +1803,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Ejects the passenger of this Minecart and teleports him to the location
      * specified
      *
-     * @param to location to eject/teleport to
+     * @param to                   location to eject/teleport to
      * @param retainEntityRotation Whether to retain the original yaw and pitch of the
      *                             rotation (camera view) of the entity. When false, does
      *                             not change where players look.
@@ -1880,7 +1833,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
     /**
      * Puts a passenger inside a seat of this Minecart Member, ignoring enter rules or permissions.
-     * 
+     *
      * @param passenger
      * @return True if the passenger was added
      */
@@ -1896,7 +1849,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Gets whether a passenger being added to this Minecart was forced.
      * Internal use only.
-     * 
+     *
      * @param entity
      * @return True if forced
      */
@@ -2174,7 +2127,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Calculates the gap between two minecarts, and the movement direction to
      * change to move from the back cart to the front cart.
-     * 
+     *
      * @param back      cart
      * @param front     cart
      * @param direction output Vector, is modified by function
@@ -2284,7 +2237,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
                     effect.volume = 100;
 
                     // Play the sound effect in first person, close to the player
-                    for(Player p : this.entity.getPlayerPassengers()) {
+                    for (Player p : this.entity.getPlayerPassengers()) {
                         effect.play(p);
                     }
 
@@ -2458,7 +2411,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         if (!this.isDerailed()) {
             this.firstKnownDerailedPosition = null;
         } else if (this.firstKnownDerailedPosition == null ||
-                   this.firstKnownDerailedPosition.getWorld() != entity.getWorld()
+                this.firstKnownDerailedPosition.getWorld() != entity.getWorld()
         ) {
             this.firstKnownDerailedPosition = entity.getLocation();
         }
@@ -2485,7 +2438,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
          * handling collision events for all of them every tick MinecartMember<?>
          * nearMember = MinecartMemberStore.getFromEntity(near); if (nearMember != null
          * && nearMember.group == this.group) { continue; }
-         * 
+         *
          * // Verify by using the transform of this Minecart whether or not the entity
          * is actually colliding // We do so by performing a
          * EntityUtil.doCollision(near, this.entity.getEntity()); } }
@@ -2522,7 +2475,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Sets the current roll of the Minecart. This does not set the roll induced by
      * shaking effects.
-     * 
+     *
      * @param newroll
      */
     public void setRoll(double newroll) {
@@ -2534,7 +2487,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Gets the current roll of the Minecart. This includes roll induced by shaking
      * effects.
-     * 
+     *
      * @return roll angle
      */
     public double getRoll() {
@@ -2545,9 +2498,9 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
     /**
      * Sets the rotation of the Minecart, taking care of wrap-around of the angles
-     * 
-     * @param newyaw      New yaw to set
-     * @param newpitch    New pitch to set
+     *
+     * @param newyaw   New yaw to set
+     * @param newpitch New pitch to set
      */
     public void setRotationWrap(float newyaw, float newpitch) {
         final float oldyaw = entity.loc.getYaw();
@@ -2597,7 +2550,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Gets the number of seats still available for new entities to enter the
      * minecart
-     * 
+     *
      * @return number of available seats
      */
     public int getAvailableSeatCount(Entity passenger) {
@@ -2616,7 +2569,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Calculates the preferred distance between the center of this Minecart and the
      * member specified. By playing with the speed of the two carts, this distance
      * is maintained steady.
-     * 
+     *
      * @param member
      * @return preferred distance
      */
@@ -2629,7 +2582,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Calculates the maximum distance between the center of this Minecart and the
      * member specified. If the distance between them exceeds this value, the two
      * Minecarts lose linkage.
-     * 
+     *
      * @param member
      * @return maximum distance
      */
@@ -2643,7 +2596,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * Minecart and the member specified that should be performed when discovering
      * rails. Generally aiming too high is not a big deal, this is only here to
      * prevent infinite cycles from crashing the server.
-     * 
+     *
      * @param member
      * @return maximum block iteration around
      */
@@ -2654,7 +2607,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Gets a rotated 3D hitbox, which can be used to test whether a player's click
      * is on this entity
-     * 
+     *
      * @return click hitbox
      */
     public OrientedBoundingBox getHitBox() {
@@ -2689,7 +2642,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Detect changes in Minecart position since the last time rail information was
      * refreshed.
-     * 
+     *
      * @return True if position changed
      */
     boolean railDetectPositionChange() {
@@ -2737,7 +2690,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Plays an animation for a single attachment node for this minecart. Only the
      * attachment at the targetPath will play the animation.
-     * 
+     *
      * @param targetPath
      * @param options    defining the animation to play
      * @return True if the attachment node and animation could be found
@@ -2750,7 +2703,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
 
     /**
      * Plays an animation for a single attachment node for this minecart.
-     * 
+     *
      * @param targetPath indices for the attachment node
      * @param animation  to play
      * @return True if the attachment node could be found
@@ -2769,7 +2722,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Plays an animation by name for this minecart. All attachments storing an
      * animation with this name will play.
-     * 
+     *
      * @param name of the animation
      * @return True if an animation was found and started
      */
@@ -2781,7 +2734,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Plays an animation using the animation options specified for this minecart.
      * All attachments storing an animation with the options' name will play.
-     * 
+     *
      * @param options for the animation
      * @return True if an animation was found and started
      */
@@ -2794,7 +2747,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     /**
      * Looks up an attachment of the Minecart by target path. The path is a series of indices to
      * get to that particular attachment in the tree hierarchy.
-     * 
+     *
      * @param targetPath
      * @return Attachment at this path, or null if not found
      */

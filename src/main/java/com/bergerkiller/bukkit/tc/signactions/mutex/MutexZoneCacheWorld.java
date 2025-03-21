@@ -1,46 +1,41 @@
 package com.bergerkiller.bukkit.tc.signactions.mutex;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.UnaryOperator;
-
+import com.bergerkiller.bukkit.common.bases.IntVector3;
+import com.bergerkiller.bukkit.common.offline.OfflineWorld;
 import com.bergerkiller.bukkit.common.utils.CommonUtil;
+import com.bergerkiller.bukkit.common.utils.MathUtil;
+import com.bergerkiller.bukkit.common.wrappers.LongHashMap;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
+import com.bergerkiller.bukkit.tc.controller.components.RailPath;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.properties.TrainPropertiesStore;
 import com.bergerkiller.bukkit.tc.rails.RailLookup;
+import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
 import org.bukkit.World;
 
-import com.bergerkiller.bukkit.common.bases.IntVector3;
-import com.bergerkiller.bukkit.common.offline.OfflineWorld;
-import com.bergerkiller.bukkit.common.utils.LogicUtil;
-import com.bergerkiller.bukkit.common.utils.MathUtil;
-import com.bergerkiller.bukkit.common.wrappers.LongHashMap;
-import com.bergerkiller.bukkit.tc.controller.components.RailPath;
-import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.*;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
+import java.util.stream.IntStream;
 
 /**
  * Mutex zones that exist on a particular world
  */
 public class MutexZoneCacheWorld {
-    private static final MutexZone[] NO_ZONES = new MutexZone[0];
+    private static class NoMutexZonesList extends ArrayList<MutexZone> {
+
+    }
+
+    private static final List<MutexZone> NO_ZONES = new NoMutexZonesList();
     private final OfflineWorld world;
     protected final Map<SignSidePositionKey, MutexZone> bySignPosition = new HashMap<>();
     protected final Map<PathingSignKey, MutexZonePath> byPathingKey = new HashMap<>();
-    private final LongHashMap<MutexZone[]> byChunk = new LongHashMap<>();
+    private final LongHashMap<List<MutexZone>> byChunk = new LongHashMap<>();
     private final Set<MutexZone> newZonesLive = new HashSet<>();
     private List<MutexZone> newZones = Collections.emptyList();
 
@@ -61,7 +56,7 @@ public class MutexZoneCacheWorld {
     }
 
     public MutexZone find(IntVector3 position) {
-        MutexZone[] inChunk = byChunk.get(position.getChunkX(), position.getChunkZ());
+        List<MutexZone> inChunk = byChunk.get(position.getChunkX(), position.getChunkZ());
         if (inChunk != null) {
             for (MutexZone zone : inChunk) {
                 if (zone.containsBlock(position)) {
@@ -92,43 +87,72 @@ public class MutexZoneCacheWorld {
         int chunkMaxX = MathUtil.toChunk(block.x + radius);
         int chunkMinZ = MathUtil.toChunk(block.z - radius);
         int chunkMaxZ = MathUtil.toChunk(block.z + radius);
-        for (int cz = chunkMinZ; cz <= chunkMaxZ; cz++) {
-            for (int cx = chunkMinX; cx <= chunkMaxX; cx++) {
-                MutexZone[] zonesAtChunk = byChunk.get(cx, cz);
-                if (zonesAtChunk != null) {
-                    for (MutexZone zone : zonesAtChunk) {
-                        if (zone.isNearby(block, radius)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        return false;
+
+        //TODO: Optimizations
+         return IntStream
+                 .rangeClosed(chunkMinZ, chunkMaxZ)
+                 .parallel()
+                 .anyMatch(cz -> IntStream
+                         .rangeClosed(chunkMinX, chunkMaxX)
+                         .filter(cx -> byChunk.contains(cx, cz))
+                         .anyMatch(cx -> byChunk.get(cx, cz)
+                                 .stream()
+                                 .anyMatch(z -> z.isNearby(block, radius))));
+
+//       for (int cz = chunkMinZ; cz <= chunkMaxZ; cz++) {
+//           for (int cx = chunkMinX; cx <= chunkMaxX; cx++) {
+//               List<MutexZone> zonesAtChunk = byChunk.get(cx, cz);
+//
+//               if (zonesAtChunk != null) {
+//                   for (MutexZone zone : zonesAtChunk) {
+//                       if (zone.isNearby(block, radius)) {
+//                           return true;
+//                       }
+//                   }
+//               }
+//           }
+//       }
+//
+//       return false;
     }
 
     public List<MutexZone> findNearbyZones(IntVector3 block, int radius) {
-        List<MutexZone> result = Collections.emptyList();
+//        List<MutexZone> result = Collections.emptyList();
         int chunkMinX = (block.x - radius) >> 4;
         int chunkMaxX = (block.x + radius) >> 4;
         int chunkMinZ = (block.z - radius) >> 4;
         int chunkMaxZ = (block.z + radius) >> 4;
-        for (int cz = chunkMinZ; cz <= chunkMaxZ; cz++) {
-            for (int cx = chunkMinX; cx <= chunkMaxX; cx++) {
-                MutexZone[] zonesAtChunk = byChunk.get(cx, cz);
-                if (zonesAtChunk != null) {
-                    for (MutexZone zone : zonesAtChunk) {
-                        if (zone.isNearby(block, radius)) {
-                            if (result.isEmpty()) {
-                                result = new ArrayList<>();
-                            }
-                            result.add(zone);
-                        }
-                    }
-                }
-            }
-        }
-        return result;
+
+        //TODO: Optimizations
+         return IntStream
+                 .rangeClosed(chunkMinZ, chunkMaxZ)
+                 .parallel()
+                 .mapToObj(cz -> IntStream
+                         .rangeClosed(chunkMinX, chunkMaxX)
+                         .filter(cx -> byChunk.contains(cx, cz))
+                         .mapToObj(cx -> byChunk.get(cx, cz))
+                         .flatMap(List::stream)
+                 )
+                 .flatMap(Function.identity())
+                 .toList();
+
+//       for (int cz = chunkMinZ; cz <= chunkMaxZ; cz++) {
+//           for (int cx = chunkMinX; cx <= chunkMaxX; cx++) {
+//               List<MutexZone> zonesAtChunk = byChunk.get(cx, cz);
+//               if (zonesAtChunk != null) {
+//                   for (MutexZone zone : zonesAtChunk) {
+//                       if (zone.isNearby(block, radius)) {
+//                           if (result.isEmpty()) {
+//                               result = new ArrayList<>();
+//                           }
+//                           result.add(zone);
+//                       }
+//                   }
+//               }
+//           }
+//       }
+//
+//       return result;
     }
 
     public void add(MutexZone zone) {
@@ -139,14 +163,12 @@ public class MutexZoneCacheWorld {
 
     protected void remove(MutexZone zone) {
         // Remove from the 'new zones' tracking as well
-        {
-            newZonesLive.remove(zone);
-            int newZoneIdx = newZones.indexOf(zone);
-            if (newZoneIdx != -1) {
-                List<MutexZone> copy = new ArrayList<>(newZones);
-                copy.remove(newZoneIdx);
-                newZones = copy;
-            }
+        newZonesLive.remove(zone);
+        int newZoneIdx = newZones.indexOf(zone);
+        if (newZoneIdx != -1) {
+            List<MutexZone> copy = new ArrayList<>(newZones);
+            copy.remove(newZoneIdx);
+            newZones = copy;
         }
 
         unmapFromChunks(zone);
@@ -158,19 +180,17 @@ public class MutexZoneCacheWorld {
 
     private void mapToChunks(MutexZone zone, boolean checkDuplicates) {
         // Usually only one zone sits in a chunk. This optimizes that case.
-        MutexZone[] singleZone = new MutexZone[] {zone};
+        List<MutexZone> singleZone = Collections.singletonList(zone);
 
         // Register in all the chunks
         zone.forAllContainedChunks((cx, cz) -> {
             long key = MathUtil.longHashToLong(cx, cz);
-            MutexZone[] atChunk = byChunk.get(key);
+            List<MutexZone> atChunk = byChunk.get(key);
+
             if (atChunk == null) {
-                byChunk.put(key, singleZone);
+                byChunk.put(key, new ArrayList<>(singleZone));
             } else if (!checkDuplicates || !isChunkInArray(atChunk, zone)) {
-                int len = atChunk.length;
-                atChunk = Arrays.copyOf(atChunk, len + 1);
-                atChunk[len] = zone;
-                byChunk.put(key, atChunk);
+                atChunk.add(zone);
             }
         });
     }
@@ -178,20 +198,19 @@ public class MutexZoneCacheWorld {
     private void unmapFromChunks(MutexZone zone) {
         zone.forAllContainedChunks((cx, cz) -> {
             long key = MathUtil.longHashToLong(cx, cz);
-            MutexZone[] atChunk = byChunk.remove(key);
-            if (atChunk != null && (atChunk.length > 1 || atChunk[0] != zone)) {
+            List<MutexZone> atChunk = byChunk.get(key);
+            if (atChunk != null && (atChunk.size() > 1 || atChunk.getFirst() != zone)) {
                 // Remove the mutex zone from the array and put back the new array
-                for (int i = atChunk.length-1; i >= 0; --i) {
-                    if (atChunk[i] == zone) {
-                        atChunk = LogicUtil.removeArrayElement(atChunk, i);
+                for (int i = atChunk.size() - 1; i >= 0; --i) {
+                    if (atChunk.get(i) == zone) {
+                        atChunk.remove(i);
                     }
                 }
-                byChunk.put(key, atChunk);
             }
         });
     }
 
-    private boolean isChunkInArray(MutexZone[] zones, MutexZone zone) {
+    private boolean isChunkInArray(List<MutexZone> zones, MutexZone zone) {
         for (MutexZone zoneInZones : zones) {
             if (zoneInZones == zone) {
                 return true;
@@ -257,7 +276,7 @@ public class MutexZoneCacheWorld {
 
         // Expire pathing mutex zones that haven't been visited by the owning group in some time
         int expireTick = CommonUtil.getServerTicks() - 2;
-        for (Iterator<MutexZonePath> iter = byPathingKey.values().iterator(); iter.hasNext();) {
+        for (Iterator<MutexZonePath> iter = byPathingKey.values().iterator(); iter.hasNext(); ) {
             MutexZonePath zonePath = iter.next();
             if (zonePath.isExpired(expireTick)) {
                 iter.remove();
@@ -275,14 +294,14 @@ public class MutexZoneCacheWorld {
         private final MutexZoneByChunkGetter byChunkGetter;
         private int chunkX;
         private int chunkZ;
-        private MutexZone[] chunkZones;
+        private List<MutexZone> chunkZones;
 
         public MovingPoint(MutexZoneByChunkGetter byChunkGetter, int chunkX, int chunkZ) {
             this.byChunkGetter = byChunkGetter;
             this.chunkX = chunkX;
             this.chunkZ = chunkZ;
 
-            MutexZone[] zones = byChunkGetter.getAt(chunkX, chunkZ);
+            List<MutexZone> zones = byChunkGetter.getAt(chunkX, chunkZ);
             this.chunkZones = (zones == null) ? NO_ZONES : zones;
         }
 
@@ -325,7 +344,7 @@ public class MutexZoneCacheWorld {
             // If same chunk, skip some special logic that combines mutex zones together
             List<MutexZone> zones;
             if (cx1 == cx2 && cz1 == cz2) {
-                zones = Arrays.asList(findZonesInChunk(cx1, cz1));
+                zones = findZonesInChunk(cx1, cz1);
             } else {
                 zones = Collections.emptyList();
 
@@ -392,7 +411,7 @@ public class MutexZoneCacheWorld {
                 MutexZoneResult best = new MutexZoneResult(null, distance);
                 for (MutexZone zone : zones) {
                     double dist = zone.hitTest(p1.posX, p1.posY, p1.posZ,
-                                               motX, motY, motZ);
+                            motX, motY, motZ);
                     if (dist < best.distance) {
                         best = new MutexZoneResult(zone, dist);
                     }
@@ -401,12 +420,12 @@ public class MutexZoneCacheWorld {
             }
         }
 
-        private MutexZone[] findZonesInChunk(int cx, int cz) {
+        private List<MutexZone> findZonesInChunk(int cx, int cz) {
             // Get/update the mutex zones in the current chunk
             if (cx != this.chunkX || cz != this.chunkZ) {
                 this.chunkX = cx;
                 this.chunkZ = cz;
-                MutexZone[] zones = byChunkGetter.getAt(cx, cz);
+                List<MutexZone> zones = byChunkGetter.getAt(cx, cz);
                 if (zones == null) {
                     zones = NO_ZONES;
                 }
@@ -442,20 +461,13 @@ public class MutexZoneCacheWorld {
 
     @FunctionalInterface
     public interface MutexZoneByChunkGetter {
-        MutexZone[] getAt(int cx, int cz);
+        List<MutexZone> getAt(int cx, int cz);
     }
 
     /**
      * The result of a mutex zone search
      */
-    public static class MutexZoneResult {
-        public final MutexZone zone;
-        public final double distance;
-
-        public MutexZoneResult(MutexZone zone, double distance) {
-            this.zone = zone;
-            this.distance = distance;
-        }
+    public record MutexZoneResult(MutexZone zone, double distance) {
     }
 
     protected static final class PathingSignKey {

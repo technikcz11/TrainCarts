@@ -12,7 +12,7 @@ bstats:
     enabled: true
     plugin-id: 18761
 
-main: com.bergerkiller.bukkit.tc.Preloader
+main: com.bergerkiller.bukkit.tc.TrainCarts
 preloader:
     main: com.bergerkiller.bukkit.tc.TrainCarts
     hastebinServer: https://paste.traincarts.net

@@ -246,7 +246,7 @@ public final class OfflineGroup {
             return null;
         }
 
-        MinecartGroup group = MinecartGroup.create(this.name, groupMembers.toArray(new MinecartMember[0]));
+        MinecartGroup group = MinecartGroup.create(this.name, groupMembers);
 
         // Initialize the group itself
         this.load(group);

@@ -41,7 +41,7 @@ public class PathWorld implements TrainCarts.Provider {
 
     /**
      * Gets the path provider responsible for this world
-     * 
+     *
      * @return provider
      */
     public PathProvider getProvider() {
@@ -50,7 +50,7 @@ public class PathWorld implements TrainCarts.Provider {
 
     /**
      * Gets the name of this World
-     * 
+     *
      * @return world name
      */
     public String getName() {
@@ -159,7 +159,7 @@ public class PathWorld implements TrainCarts.Provider {
     }
 
     protected void cacheSearchResult(PathSearchResult result) {
-        _cachedSearchResults.put(new PathFromToKey(result.node, result.destination), result);
+        _cachedSearchResults.put(new PathFromToKey(result.getNode(), result.getDestination()), result);
     }
 
     private static final class PathFromToKey {

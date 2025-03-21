@@ -4,7 +4,7 @@ package com.bergerkiller.bukkit.tc.pathfinding;
  * The results of searching the path from one path node to another.
  * Stores the path nodes, connections and total distance traversed.
  */
-final class PathSearchResult {
+public final class PathSearchResult {
     /** Dummy result used to signal skipping a search */
     public static final PathSearchResult DUMMY_NOT_FOUND = new PathSearchResult(null, null, null, null, Double.MAX_VALUE, false);
     static {
@@ -12,17 +12,17 @@ final class PathSearchResult {
     }
 
     /** Node this path search result is for */
-    public final PathNode node;
+    private final PathNode node;
     /** Destination to reach that this result is for */
-    public final PathNode destination;
+    private final PathNode destination;
     /** Connection of this node that is taken to reach the destination. Null if end. */
-    public final PathConnection connection;
+    private final PathConnection connection;
     /** The next search search result when following the {@link #connection} Null if end. */
-    public final PathSearchResult next;
+    private final PathSearchResult next;
     /** Total distance from this node to the destination */
-    public final double distance;
+    private final double distance;
     /** True if a path was found */
-    public final boolean found;
+    private final boolean found;
     /** Whether this result has been cached in the node */
     private boolean needsToBeCached;
 
@@ -63,8 +63,7 @@ final class PathSearchResult {
      * @return result
      */
     public static PathSearchResult chain(PathNode node, PathNode destination, PathConnection connection, PathSearchResult next) {
-        return new PathSearchResult(node, destination, connection, next,
-                connection.distance + next.distance, true);
+        return new PathSearchResult(node, destination, connection, next,connection.distance + next.distance, true);
     }
 
     private PathSearchResult(PathNode node, PathNode destination, PathConnection connection, PathSearchResult next, double distance, boolean found) {
@@ -88,5 +87,33 @@ final class PathSearchResult {
             r.node.getWorld().cacheSearchResult(r);
             r = r.next;
         }
+    }
+
+    public PathNode getDestination() {
+        return destination;
+    }
+
+    public double getDistance() {
+        return distance;
+    }
+
+    public PathConnection getConnection() {
+        return connection;
+    }
+
+    public PathSearchResult getNext() {
+        return next;
+    }
+
+    public PathNode getNode() {
+        return node;
+    }
+
+    public boolean isFound() {
+        return found;
+    }
+
+    public boolean isNeededToBeCached() {
+        return needsToBeCached;
     }
 }

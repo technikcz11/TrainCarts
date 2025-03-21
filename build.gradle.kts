@@ -20,6 +20,9 @@ repositories {
     }
     maven("https://ci.mg-dev.eu/plugin/repository/everything/")
     maven("https://repo.papermc.io/repository/maven-public/")
+    mavenLocal {
+        files("libs")
+    }
 }
 
 dependencies {
@@ -82,8 +85,8 @@ tasks {
     }
 
     withType<JavaCompile>().configureEach {
-        sourceCompatibility = "1.8"
-        targetCompatibility = "1.8"
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
     }
 
     javadoc {

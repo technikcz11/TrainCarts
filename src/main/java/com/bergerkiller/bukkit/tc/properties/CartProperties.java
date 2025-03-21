@@ -17,6 +17,7 @@ import com.bergerkiller.bukkit.tc.properties.api.IPropertyRegistry;
 import com.bergerkiller.bukkit.tc.properties.api.PropertyParseResult;
 import com.bergerkiller.bukkit.tc.properties.standard.StandardProperties;
 import com.bergerkiller.bukkit.tc.properties.standard.fieldbacked.FieldBackedStandardCartProperty;
+import com.bergerkiller.bukkit.tc.properties.standard.type.CartLockOrientation;
 import com.bergerkiller.bukkit.tc.properties.standard.type.ExitOffset;
 import com.bergerkiller.bukkit.tc.properties.standard.type.SignSkipOptions;
 import com.bergerkiller.bukkit.tc.offline.train.OfflineMember;
@@ -63,7 +64,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * Called when the CartProperties were already created but need to be re-created.
      * Expects the caller to eventually loadConfiguration() to refresh variables
      * caching the configuration.
-     * 
+     *
      * @param group
      * @param config
      */
@@ -98,6 +99,10 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
         return property.get(this);
     }
 
+    public final boolean has(IProperty<?> property) {
+        return get(property) != CartLockOrientation.NONE;
+    }
+
     @Override
     public final <T> void set(IProperty<T> property, T value) {
         property.set(this, value);
@@ -112,7 +117,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
 
     /**
      * Sets the holder of these properties. Internal use only.
-     * 
+     *
      * @param holder
      */
     protected void setHolder(MinecartMember<?> holder) {
@@ -336,7 +341,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
     /**
      * Gets the relative exit offset players are ejected at when
      * seat attachments don't define one.
-     * 
+     *
      * @return relative exit offset
      */
     public ExitOffset getExitOffset() {
@@ -346,7 +351,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
     /**
      * Sets the relative exit offset players are ejected at when
      * seat attachments don't define one.
-     * 
+     *
      * @param new_offset New offset to set to
      */
     public void setExitOffset(ExitOffset new_offset) {
@@ -636,7 +641,7 @@ public class CartProperties extends CartPropertiesStore implements IProperties {
      * Gets the attachment model set for this particular cart. If no model was previously set,
      * a model is created based on the vanilla default model that is used. This model is not saved
      * unless additional changes are made to it.
-     * 
+     *
      * @return model set, null for Vanilla
      */
     public AttachmentModel getModel() {

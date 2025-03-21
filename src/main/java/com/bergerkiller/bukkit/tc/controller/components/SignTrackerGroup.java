@@ -260,7 +260,7 @@ public class SignTrackerGroup extends SignTracker {
 
                 // Update cart signs
                 // Activating a sign might cause a change to this train, make a defensive copy
-                for (MinecartMember<?> member : owner.toArray()) {
+                for (MinecartMember<?> member : owner) {
                     if (!member.isUnloaded() && member.getGroup() == owner) {
                         final SignTrackerMember tracker = member.getSignTracker();
                         tracker.updateActiveSigns(() -> {
@@ -284,7 +284,7 @@ public class SignTrackerGroup extends SignTracker {
                 List<TrackedRail> rails = this.getOwner().getRailTracker().getRailInformation();
                 if (!this.detectorRegions.isEmpty()) {
                     // Secure copy
-                    MinecartMember<?>[] members = this.getOwner().toArray();
+                    MinecartMember<?>[] members = this.getOwner().toArray(new MinecartMember[0]);
 
                     // Clear detector regions set for members
                     for (MinecartMember<?> member : members) {

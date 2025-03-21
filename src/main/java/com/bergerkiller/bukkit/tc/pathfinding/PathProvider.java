@@ -17,7 +17,6 @@ import com.bergerkiller.bukkit.tc.rails.type.RailType;
 import com.bergerkiller.bukkit.tc.signactions.SignAction;
 import com.bergerkiller.bukkit.tc.signactions.SignActionType;
 import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
-
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -30,25 +29,17 @@ import org.bukkit.entity.Player;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
 import java.util.logging.Level;
+import java.util.stream.Stream;
 
 public class PathProvider extends Task implements TrainCarts.Provider {
     private static final String SWITCHER_NAME_FALLBACK = "::traincarts::switchable::";
     public static final int DEFAULT_MAX_PROCESSING_PER_TICK = 30; // Maximum processing time in Ms per tick
     public static boolean DEBUG_MODE = false;
     private final Map<String, PathWorld> worlds = new HashMap<String, PathWorld>();
-    private final List<PathRoutingHandler> handlers = new ArrayList<PathRoutingHandler>();
+    private final List<PathRoutingHandler> handlers = new ArrayList<>();
+    private PathRoutingHandler handler;
     /**
      * Block locations where discovery needs to be done to see if there is a pathfinding
      * node there. If there is, then a node is created and re-routing from that node
@@ -176,6 +167,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
      */
     public void registerRoutingHandler(PathRoutingHandler handler) {
         this.handlers.add(handler);
+        this.handler = handler;
     }
 
     /**
@@ -196,7 +188,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
      * @see PathPredictEvent
      */
     public void predictRoutingHandler(PathPredictEvent event) {
-        this.handlers.forEach(handler -> handler.predict(event));
+        handler.predict(event);
     }
 
     /**
@@ -205,7 +197,8 @@ public class PathProvider extends Task implements TrainCarts.Provider {
      *
      * @param durationMillis
      */
-    public void setMaxProcessingPerTick(int durationMillis) {
+    public void setMaxProcessingPerTick(Integer durationMillis) {
+        if(durationMillis == null) return;
         this.maxProcessingPerTick = durationMillis;
     }
 
@@ -332,10 +325,10 @@ public class PathProvider extends Task implements TrainCarts.Provider {
         }.write();
         hasChanges = false;
     }
-    
+
     /**
      * Gets a collection of worlds on which path data is stored
-     * 
+     *
      * @return worlds
      */
     public Collection<PathWorld> getWorlds() {
@@ -344,7 +337,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
 
     /**
      * Gets the path node information stored for a world
-     * 
+     *
      * @param worldName
      * @return PathWorld instance for the world with worldName
      */
@@ -354,7 +347,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
 
     /**
      * Gets the path node information stored for a world
-     * 
+     *
      * @param world
      * @return PathWorld instance for the world
      */
@@ -411,7 +404,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
 
     /**
      * Schedules a node to start calculating all neighboring paths
-     * 
+     *
      * @param startNode
      */
     public void scheduleNode(PathNode startNode) {
@@ -448,7 +441,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
      * Tells this Path Provider to schedule new destination and switcher sign discovery, starting at a particular
      * rails block. This rail location must have signs that switch or declare a destination, otherwise
      * nothing will happen.
-     * 
+     *
      * @param railLocation to discover destinations and switchers at
      */
     public void discoverFromRail(BlockLocation railLocation) {
@@ -558,9 +551,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
             RailState initialState = RailState.getSpawnState(RailPiece.create(railType, railBlock));
             PathRoutingHandler.PathRouteEvent routeEvent = new PathRoutingHandler.PathRouteEvent(this, initialState.railWorld());
             routeEvent.resetToInitialState(initialState, initialState.loadRailLogic().getPath(), 0.0);
-            for (PathRoutingHandler handler : this.handlers) {
-                handler.process(routeEvent);
-            }
+            handler.process(routeEvent);
         } while ((System.currentTimeMillis() - startTime) <= this.maxProcessingPerTick);
     }
 
@@ -667,9 +658,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
                 @Override
                 public void navigate(PathRoutingHandler.PathRouteEvent event) {
                     // Handle event
-                    for (PathRoutingHandler handler : event.provider().handlers) {
-                        handler.process(event);
-                    }
+                    event.provider().handler.process(event);
 
                     // Process results
                     PathNode foundNode = event.getLastSetNode();
@@ -731,16 +720,14 @@ public class PathProvider extends Task implements TrainCarts.Provider {
      * @param routeEvent Route event to notify to all handlers
      */
     public void handleRouting(PathRoutingHandler.PathRouteEvent routeEvent) {
-        for (PathRoutingHandler handler : this.handlers) {
-            handler.process(routeEvent);
-        }
+        handler.process(routeEvent);
     }
 
     /**
      * Queries all registered routing handlers while navigating over the track
-     * 
-     * @param railState Current rail state position information
-     * @param railPath Current rail path navigated over
+     *
+     * @param railState       Current rail state position information
+     * @param railPath        Current rail path navigated over
      * @param currentDistance Current distance moved from start
      * @return PathRouteEvent storing the results of routing
      */

@@ -1,7 +1,9 @@
 package com.bergerkiller.bukkit.tc.debug.types;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import com.bergerkiller.bukkit.common.inventory.CommonItemStack;
 import org.bukkit.ChatColor;
@@ -9,7 +11,6 @@ import org.bukkit.Location;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 
-import com.bergerkiller.bukkit.common.utils.LogicUtil;
 import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.common.wrappers.ChatText;
 import com.bergerkiller.bukkit.tc.Direction;
@@ -136,8 +137,13 @@ public class DebugToolTypeRails extends DebugToolTrackWalkerType {
                                "/" + sign.sign.getZ() + "] ";
 
                 ChatText text = ChatText.fromMessage(coord + color + name + dirName);
-                text.setHoverText(createHoverTextForSign(
-                        LogicUtil.appendArray(sign.sign.getLines(), sign.getExtraLines())));
+
+                List<String> lines = Stream.concat(
+                        Stream.of(sign.getExtraLines()),
+                        Stream.of(sign.sign.getLines())
+                ).toList();
+
+                text.setHoverText(createHoverTextForSign(lines));
                 text.sendTo(player);
             }
         }
@@ -147,10 +153,10 @@ public class DebugToolTypeRails extends DebugToolTrackWalkerType {
         return color.toString() + ChatColor.UNDERLINE + name.charAt(0) + ChatColor.RESET + color + name.substring(1);
     }
 
-    private static ChatText createHoverTextForSign(String[] lines) {
+    private static ChatText createHoverTextForSign(List<String> lines) {
         // Don't show trailing empty lines
-        int len = lines.length;
-        while (len > 0 && lines[len - 1].isEmpty()) {
+        int len = lines.size();
+        while (len > 0 && lines.get(len - 1).isEmpty()) {
             len--;
         }
 
@@ -159,7 +165,7 @@ public class DebugToolTypeRails extends DebugToolTrackWalkerType {
             if (i > 0) {
                 str.append('\n');
             }
-            str.append(lines[i]);
+            str.append(lines.get(i));
         }
         return ChatText.fromMessage(str.toString());
     }

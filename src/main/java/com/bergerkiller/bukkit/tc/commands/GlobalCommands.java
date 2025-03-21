@@ -17,11 +17,7 @@ import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
 import com.bergerkiller.bukkit.common.utils.WorldUtil;
 import com.bergerkiller.bukkit.common.wrappers.ChatText;
-import com.bergerkiller.bukkit.tc.Localization;
-import com.bergerkiller.bukkit.tc.Permission;
-import com.bergerkiller.bukkit.tc.TCConfig;
-import com.bergerkiller.bukkit.tc.TrainCarts;
-import com.bergerkiller.bukkit.tc.Util;
+import com.bergerkiller.bukkit.tc.*;
 import com.bergerkiller.bukkit.tc.attachments.ui.AttachmentEditor;
 import com.bergerkiller.bukkit.tc.attachments.ui.SetValueTarget;
 import com.bergerkiller.bukkit.tc.commands.annotations.CommandRequiresPermission;
@@ -35,13 +31,8 @@ import com.bergerkiller.bukkit.tc.pathfinding.PathNode;
 import com.bergerkiller.bukkit.tc.pathfinding.PathWorld;
 import com.bergerkiller.bukkit.tc.properties.TrainProperties;
 import com.bergerkiller.bukkit.tc.statements.Statement;
-
 import com.bergerkiller.bukkit.tc.tickets.TicketStore;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Effect;
-import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
@@ -57,13 +48,13 @@ import org.incendo.cloud.annotations.CommandDescription;
 import org.incendo.cloud.annotations.Flag;
 import org.incendo.cloud.description.Description;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class GlobalCommands {
 
@@ -117,7 +108,7 @@ public class GlobalCommands {
     private void commandListTrains(
             final TrainCarts plugin,
             final CommandSender sender,
-            final @Argument(value="filter", suggestions="trainlistfilter") @Greedy String filter
+            final @Argument(value = "filter", suggestions = "trainlistfilter") @Greedy String filter
     ) {
         // Arg-less list command also shows global stats
         if (filter == null || filter.isEmpty()) {
@@ -190,8 +181,8 @@ public class GlobalCommands {
             final CommandSender sender,
             final TrainCarts plugin,
             final @Flag("world") World world,
-            final @Flag(value="vanilla",
-                    description="Whether to destroy non-Traincarts vanilla Minecarts too") boolean destroyVanilla
+            final @Flag(value = "vanilla",
+                    description = "Whether to destroy non-Traincarts vanilla Minecarts too") boolean destroyVanilla
     ) {
         commandDestroyAll(sender, plugin, world, destroyVanilla);
     }
@@ -203,15 +194,15 @@ public class GlobalCommands {
             final CommandSender sender,
             final TrainCarts plugin,
             final @Flag("world") World world,
-            final @Flag(value="vanilla",
-                        description="Whether to destroy non-Traincarts vanilla Minecarts too") boolean destroyVanilla
+            final @Flag(value = "vanilla",
+                    description = "Whether to destroy non-Traincarts vanilla Minecarts too") boolean destroyVanilla
     ) {
         // Destroy all trains on the entire server (or on one world)
         CompletableFuture<Integer> future = (world == null)
                 ? plugin.getOfflineGroups().destroyAllAsync(destroyVanilla)
                 : plugin.getOfflineGroups().destroyAllAsync(world, destroyVanilla);
         future.thenAccept(count -> {
-            sender.sendMessage(ChatColor.RED.toString() + count + " (visible) trains have been destroyed!");  
+            sender.sendMessage(ChatColor.RED.toString() + count + " (visible) trains have been destroyed!");
         });
     }
 
@@ -245,9 +236,9 @@ public class GlobalCommands {
             final @Argument("value") @Greedy String value
     ) {
         // Get editor instance
-        MapDisplay display = MapDisplay.getHeldDisplay((Player) sender, AttachmentEditor.class);
+        MapDisplay display = MapDisplay.getHeldDisplay(sender, AttachmentEditor.class);
         if (display == null) {
-            display = MapDisplay.getHeldDisplay((Player) sender);
+            display = MapDisplay.getHeldDisplay(sender);
             if (display == null) {
                 sender.sendMessage(ChatColor.RED + "You do not have an editor menu open");
                 return;
@@ -259,13 +250,12 @@ public class GlobalCommands {
         if (!(focused instanceof SetValueTarget)) {
             focused = display.getActivatedWidget();
         }
-        if (!(focused instanceof SetValueTarget)) {
+        if (!(focused instanceof SetValueTarget target)) {
             sender.sendMessage(ChatColor.RED + "No suitable menu item is active!");
             return;
         }
 
         // Got a target, input the value into it
-        SetValueTarget target = (SetValueTarget) focused;
         boolean success = target.acceptTextValue(operation, value);
         String propname = target.getAcceptedPropertyName();
         if (success) {
@@ -281,9 +271,9 @@ public class GlobalCommands {
     private void commandReroute(
             final CommandSender sender,
             final TrainCarts plugin,
-            final @Flag(value="lazy", description="Delays recalculating routes until a train needs it") boolean lazy,
-            final @Flag(value="stop", description="Stops all ongoing path route discovery operations") boolean stop,
-            final @Flag(value="status", description="Displays what the routing manager is currently doing") boolean status
+            final @Flag(value = "lazy", description = "Delays recalculating routes until a train needs it") boolean lazy,
+            final @Flag(value = "stop", description = "Stops all ongoing path route discovery operations") boolean stop,
+            final @Flag(value = "status", description = "Displays what the routing manager is currently doing") boolean status
     ) {
         if (status) {
             if (!plugin.getPathProvider().isProcessing()) {
@@ -314,19 +304,19 @@ public class GlobalCommands {
     private void commandReloadConfig(
             final CommandSender sender,
             final TrainCarts traincarts,
-            final @Flag(value="config", description="Reload config.yml") boolean config,
-            final @Flag(value="routes", description="Reload routes.yml") boolean routes,
-            final @Flag(value="defaulttrainproperties", description="Reload DefaultTrainProperties.yml") boolean defaultTrainproperties,
-            final @Flag(value="savedtrainproperties", description="Reload SavedTrainProperties.yml and modules") boolean savedTrainproperties,
-            final @Flag(value="modelstore", description="Reload SavedModels.yml and modules") boolean modelStore,
-            final @Flag(value="tickets", description="Reload tickets.yml") boolean tickets
+            final @Flag(value = "config", description = "Reload config.yml") boolean config,
+            final @Flag(value = "routes", description = "Reload routes.yml") boolean routes,
+            final @Flag(value = "defaulttrainproperties", description = "Reload DefaultTrainProperties.yml") boolean defaultTrainproperties,
+            final @Flag(value = "savedtrainproperties", description = "Reload SavedTrainProperties.yml and modules") boolean savedTrainproperties,
+            final @Flag(value = "modelstore", description = "Reload SavedModels.yml and modules") boolean modelStore,
+            final @Flag(value = "tickets", description = "Reload tickets.yml") boolean tickets
     ) {
         if (!config &&
-            !routes &&
-            !defaultTrainproperties &&
-            !savedTrainproperties &&
-            !modelStore &&
-            !tickets
+                !routes &&
+                !defaultTrainproperties &&
+                !savedTrainproperties &&
+                !modelStore &&
+                !tickets
         ) {
             sender.sendMessage(ChatColor.RED + "Please specify one or more configuration files to reload:");
             sender.sendMessage(ChatColor.RED + "/train globalconfig reload --config");
@@ -459,15 +449,15 @@ public class GlobalCommands {
     private void commandEditByName(
             final TrainCarts plugin,
             final Player sender,
-            final @Quoted @Argument(value="trainname", suggestions="quoted_trainnames") String trainName
+            final @Quoted @Argument(value = "trainname", suggestions = "quoted_trainnames") String trainName
     ) {
         TrainProperties prop = TrainProperties.get(trainName);
         if (prop == null) {
             prop = TrainProperties.getRelaxed(trainName);
         }
         if (prop != null && !prop.isEmpty()) {
-            if (prop.hasOwnership((Player) sender)) {
-                plugin.getPlayer((Player) sender).editCart(prop.get(0));
+            if (prop.hasOwnership(sender)) {
+                plugin.getPlayer(sender).editCart(prop.get(0));
                 Localization.EDIT_SUCCESS.message(sender, prop.getTrainName());
             } else {
                 Localization.EDIT_NOTOWNED.message(sender);
@@ -572,7 +562,7 @@ public class GlobalCommands {
     private void commandPerformTick(
             final CommandSender sender,
             final TrainCarts plugin,
-            final @Argument("times") @Range(min="1") int number
+            final @Argument("times") @Range(min = "1") int number
     ) {
         plugin.getTrainUpdateController().step(number);
         if (number <= 1) {
@@ -589,97 +579,79 @@ public class GlobalCommands {
             final CommandSender sender,
             final TrainCarts plugin
     ) {
-        if(sender instanceof Player){
-            Player player = (Player)sender;
+        if (sender instanceof Player player) {
 
-            ChatText chatText = ChatText.fromMessage(ChatColor.YELLOW.toString() + "Click one of the below options to open an issue on GitHub:");
+            ChatText chatText = ChatText.fromMessage(ChatColor.YELLOW + "Click one of the below options to open an issue on GitHub:");
             chatText.sendTo(player);
-            try{
-                String bugReport = "## Info" +
-                        "\nPlease provide the following information:" +
-                        "\n" +
-                        "\n- BKCommonLib Version: " + CommonPlugin.getInstance().getDebugVersion() +
-                        "\n- TrainCarts Version: " + plugin.getDebugVersion() +
-                        "\n- Server Type and Version: " + Bukkit.getVersion() +
-                        "\n" +
-                        "\n----" +
-                        "\n## Bug" +
-                        "\n" +
-                        "\n### Description" +
-                        "\n" +
-                        "\n### Expected Behaviour" +
-                        "\n" +
-                        "\n### Actual Behaviour" +
-                        "\n" +
-                        "\n### Steps to reproduce" +
-                        "\n" +
-                        "\n### Additional Information" +
-                        "\n*This issue was created using the `/train issue` command!*";
-                
-                String featureRequest = "## Feature Request" +
-                        "\n" +
-                        "\n### Description" +
-                        "\n" +
-                        "\n### Examples";
-                
-                chatText = ChatText.empty().appendClickableURL(ChatColor.RED.toString() + ChatColor.UNDERLINE.toString() + "Bug Report", 
-                        "https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(bugReport, "UTF-8"),
-                        "Click to open a Bug Report");
-                chatText.sendTo(player);
-                
-                chatText = ChatText.empty().appendClickableURL(ChatColor.GREEN.toString() + ChatColor.UNDERLINE.toString() + "Feature Request",
-                        "https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(featureRequest, "UTF-8"),
-                        "Click to open a Feature Request");
-                chatText.sendTo(player);
-            }catch(UnsupportedEncodingException ex){
-                chatText = ChatText.empty().appendClickableURL(ChatColor.RED.toString() + ChatColor.UNDERLINE.toString() + "Bug Report",
-                        "https://github.com/bergerhealer/TrainCarts/issues/new?template=bug_report.md",
-                        "Click to open a Bug Report");
-                chatText.sendTo(player);
-                
-                chatText = ChatText.empty().appendClickableURL(ChatColor.GREEN.toString() + ChatColor.UNDERLINE.toString() + "Feature Request",
-                        "https://github.com/bergerhealer/TrainCarts/issues/new?template=feature_request.md",
-                        "Click to open a Feature Request");
-                chatText.sendTo(player);
-            }
-        }else{
+            String bugReport = "## Info" +
+                    "\nPlease provide the following information:" +
+                    "\n" +
+                    "\n- BKCommonLib Version: " + CommonPlugin.getInstance().getDebugVersion() +
+                    "\n- TrainCarts Version: " + plugin.getDebugVersion() +
+                    "\n- Server Type and Version: " + Bukkit.getVersion() +
+                    "\n" +
+                    "\n----" +
+                    "\n## Bug" +
+                    "\n" +
+                    "\n### Description" +
+                    "\n" +
+                    "\n### Expected Behaviour" +
+                    "\n" +
+                    "\n### Actual Behaviour" +
+                    "\n" +
+                    "\n### Steps to reproduce" +
+                    "\n" +
+                    "\n### Additional Information" +
+                    "\n*This issue was created using the `/train issue` command!*";
+
+            String featureRequest = "## Feature Request" +
+                    "\n" +
+                    "\n### Description" +
+                    "\n" +
+                    "\n### Examples";
+
+            chatText = ChatText.empty().appendClickableURL(ChatColor.RED + ChatColor.UNDERLINE.toString() + "Bug Report",
+                    "https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(bugReport, StandardCharsets.UTF_8),
+                    "Click to open a Bug Report");
+            chatText.sendTo(player);
+
+            chatText = ChatText.empty().appendClickableURL(ChatColor.GREEN.toString() + ChatColor.UNDERLINE + "Feature Request",
+                    "https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(featureRequest, StandardCharsets.UTF_8),
+                    "Click to open a Feature Request");
+            chatText.sendTo(player);
+        } else {
             MessageBuilder builder = new MessageBuilder();
             builder.white("Click one of the below URLs to open an issue on GitHub:");
-            
-            try{
-                String bugReport = "## Info" +
-                        "\nPlease provide the following information:" +
-                        "\n" +
-                        "\n- BKCommonLib Version: " + CommonPlugin.getInstance().getDebugVersion() +
-                        "\n- TrainCarts Version: " + plugin.getDebugVersion() +
-                        "\n- Server Type and Version: " + Bukkit.getVersion() +
-                        "\n" +
-                        "\n----" +
-                        "\n## Bug" +
-                        "\n" +
-                        "\n### Description" +
-                        "\n" +
-                        "\n### Expected Behaviour" +
-                        "\n" +
-                        "\n### Actual Behaviour" +
-                        "\n" +
-                        "\n### Steps to reproduce" +
-                        "\n" +
-                        "\n### Additional Information" +
-                        "\n*This issue was created using the `/train issue` command!*";
 
-                String featureRequest = "## Feature Request" +
-                        "\n" +
-                        "\n### Description" +
-                        "\n" +
-                        "\n### Examples";
-                
-                builder.white("Bug Report: https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(bugReport, "UTF-8"))
-                       .append("Feature Request: https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(featureRequest, "UTF-8"));
-            }catch(UnsupportedEncodingException ex){
-                builder.white("Bug Report: https://github.com/bergerhealer/TrainCarts/issues/new?template=bug_report.md")
-                       .append("Feature Request: https://github.com/bergerhealer/TrainCarts/issues/new?template=feature_request.md");
-            }
+            String bugReport = "## Info" +
+                    "\nPlease provide the following information:" +
+                    "\n" +
+                    "\n- BKCommonLib Version: " + CommonPlugin.getInstance().getDebugVersion() +
+                    "\n- TrainCarts Version: " + plugin.getDebugVersion() +
+                    "\n- Server Type and Version: " + Bukkit.getVersion() +
+                    "\n" +
+                    "\n----" +
+                    "\n## Bug" +
+                    "\n" +
+                    "\n### Description" +
+                    "\n" +
+                    "\n### Expected Behaviour" +
+                    "\n" +
+                    "\n### Actual Behaviour" +
+                    "\n" +
+                    "\n### Steps to reproduce" +
+                    "\n" +
+                    "\n### Additional Information" +
+                    "\n*This issue was created using the `/train issue` command!*";
+
+            String featureRequest = "## Feature Request" +
+                    "\n" +
+                    "\n### Description" +
+                    "\n" +
+                    "\n### Examples";
+
+            builder.white("Bug Report: https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(bugReport, StandardCharsets.UTF_8))
+                    .append("Feature Request: https://github.com/bergerhealer/TrainCarts/issues/new?body=" + URLEncoder.encode(featureRequest, StandardCharsets.UTF_8));
             builder.send(sender);
         }
     }
@@ -705,6 +677,29 @@ public class GlobalCommands {
                 .setFilledMapColor(0xFF0000);
         sender.getInventory().addItem(item.toBukkit());
         sender.sendMessage(ChatColor.GREEN + "Given a Traincarts attachments editor");
+    }
+
+    private static String parseTrainLineNameKey(String name) {
+        String[] parts = name.split(" \\| ");
+
+        if (parts.length < 2) return "OTHERS";
+        return parts[0];
+    }
+
+    private static void sendMessage(CommandSender sender, List<String> trips, String lineName) {
+        // Rebuild a new line with clickable items and hover display details
+        ChatText combined = ChatText.empty();
+
+        combined.append(ChatColor.YELLOW + lineName + ": ");
+
+        for (int i = 0; i < trips.size(); i++) {
+            if (i > 0) {
+                combined.append(ChatColor.WHITE + " / ");
+            }
+            combined.append(listFormatTrainName(trips.get(i)));
+        }
+
+        combined.sendTo(sender);
     }
 
     public static void listTrains(TrainCarts plugin, CommandSender sender, String filter) {
@@ -734,18 +729,18 @@ public class GlobalCommands {
             // Let the train name handler handle this one
             try {
                 plugin.getSelectorHandlerRegistry().find("train")
-                                                   .handle(sender, "train", conditions)
-                                                   .forEach(builder::append);
+                        .handle(sender, "train", conditions)
+                        .forEach(builder::append);
             } catch (SelectorException ex) {
                 sender.sendMessage(ChatColor.RED + "[TrainCarts] " + ex.getMessage());
                 return;
             }
 
             ChatText.fromMessage(ChatColor.YELLOW + "The ")
-                .append(ChatText.fromClickableContent(ChatColor.BLUE.toString() + ChatColor.UNDERLINE + "selector", filter)
-                                .setHoverText("Click to copy selector to Clipboard"))
-                .append(ChatColor.YELLOW + " matches the following trains:")
-                .sendTo(sender);
+                    .append(ChatText.fromClickableContent(ChatColor.BLUE.toString() + ChatColor.UNDERLINE + "selector", filter)
+                            .setHoverText("Click to copy selector to Clipboard"))
+                    .append(ChatColor.YELLOW + " matches the following trains:")
+                    .sendTo(sender);
         } else {
             // Default list command / uses statements
             if (sender instanceof Player) {
@@ -782,19 +777,31 @@ public class GlobalCommands {
 
         //builder.send(sender);
 
-        // Turn the train names into clickable items, which when clicked, run /train edit [trainname]
-        for (String line : builder.lines()) {
-            String[] trainNames = line.split(Pattern.quote(" / "));
+        Map<String, List<String>> lines = Arrays
+                .stream(builder.lines())
+                .flatMap(l -> Stream.of(l.split(Pattern.quote(" / "))))
+                .collect(Collectors.groupingBy(GlobalCommands::parseTrainLineNameKey));
 
-            // Rebuild a new line with clickable items and hover display details
-            ChatText combined = ChatText.empty();
-            for (int i = 0; i < trainNames.length; i++) {
-                if (i > 0) {
-                    combined.append(ChatColor.WHITE + " / ");
-                }
-                combined.append(listFormatTrainName(trainNames[i]));
-            }
-            combined.sendTo(sender);
+        List<String> lineNames = new ArrayList<>(lines.keySet());
+        boolean hasOthers = lineNames.remove("OTHERS");
+
+        Collections.sort(lineNames);
+
+        // Turn the train names into clickable items, which when clicked, run /train edit [trainname]
+        for (String trainLineName : lineNames) {
+            sendMessage(
+                    sender,
+                    lines.get(trainLineName),
+                    trainLineName
+            );
+        }
+
+        if (hasOthers) {
+            sendMessage(
+                    sender,
+                    lines.get("OTHERS"),
+                    "OTHERS"
+            );
         }
     }
 
@@ -811,8 +818,8 @@ public class GlobalCommands {
             IntVector3 block = head.loc.block();
             text = ChatText.fromMessage(ChatColor.GREEN.toString() + ChatColor.UNDERLINE + name);
             text.setHoverText(ChatColor.GREEN + "Loaded in world " + ChatColor.YELLOW + worldName +
-                              ChatColor.GREEN + " at " +
-                              ChatColor.WHITE + block.x + "/" + block.y + "/" + block.z);
+                    ChatColor.GREEN + " at " +
+                    ChatColor.WHITE + block.x + "/" + block.y + "/" + block.z);
         } else {
             text = ChatText.fromMessage(ChatColor.RED.toString() + ChatColor.UNDERLINE + name);
             text.setHoverText(ChatColor.RED + "Not loaded");

@@ -6,6 +6,7 @@ import com.bergerkiller.bukkit.common.utils.BlockUtil;
 import com.bergerkiller.bukkit.common.utils.MaterialUtil;
 import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.common.utils.WorldUtil;
+import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.detector.DetectorListener;
@@ -17,6 +18,7 @@ import com.bergerkiller.bukkit.tc.rails.RailLookup;
 import com.bergerkiller.bukkit.tc.signactions.SignActionDetector;
 import com.bergerkiller.bukkit.tc.statements.Statement;
 
+import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
@@ -50,9 +52,12 @@ public class DetectorSign implements DetectorListener {
     }
 
     public void loadChunks(World world) {
-        int cx = MathUtil.toChunk(this.sign.getPosition().x);
-        int cz = MathUtil.toChunk(this.sign.getPosition().z);
-        WorldUtil.loadChunks(world, cx, cz, 3);
+        SignActionDetector.SignRefresher.INSTANCE.registerLocation(new SignActionDetector.SignRefreshLocation(
+                world,
+                MathUtil.toChunk(this.sign.getPosition().x),
+                MathUtil.toChunk(this.sign.getPosition().z),
+                3
+        ));
     }
 
     /**
