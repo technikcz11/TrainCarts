@@ -33,7 +33,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 class TCPacketListener implements PacketListener {
     public static final int ATTACK_SUPPRESS_DURATION = 250; // 250ms
-    public static final PacketType[] LISTENED_TYPES = new PacketType[] {
+    public static final PacketType[] LISTENED_TYPES = new PacketType[]{
             PacketType.IN_STEER_VEHICLE, PacketType.IN_USE_ENTITY, PacketType.IN_ENTITY_ACTION,
             PacketType.IN_POSITION, PacketType.IN_POSITION_LOOK
     };
@@ -122,62 +122,60 @@ class TCPacketListener implements PacketListener {
 
             // Find all Minecart entities that are nearby the player
             Location eyeLoc = event.getPlayer().getEyeLocation();
-            try (ImplicitlySharedSet<MinecartGroup> groups = MinecartGroupStore.getGroups().clone()) {
-                for (MinecartGroup group : groups) {
-                    if (group.getWorld() != eyeLoc.getWorld()) {
-                        continue;
+            for (MinecartGroup group : MinecartGroupStore.getGroups()) {
+                if (group.getWorld() != eyeLoc.getWorld()) {
+                    continue;
+                }
+
+                for (MinecartMember<?> member : group) {
+                    if (!member.getAttachments().isViewer(event.getPlayer())) {
+                        continue; // If not visible, don't loop through the model to check this
+                    }
+                    if (!member.getAttachments().isAttachment(entityId)) {
+                        continue; // Id is not used in the model
                     }
 
-                    for (MinecartMember<?> member : group) {
-                        if (!member.getAttachments().isViewer(event.getPlayer())) {
-                            continue; // If not visible, don't loop through the model to check this
-                        }
-                        if (!member.getAttachments().isAttachment(entityId)) {
-                            continue; // Id is not used in the model
-                        }
-
-                        // UseAction INTERACT_AT fires for all entities, including Armorstands
-                        // The INTERACT only fires for interactable entities, like Minecarts
-                        // Since INTERACT_AT also fires for Minecarts, it is easier to ignore INTERACT
-                        // and do all handling using INTERACT_AT.
-                        if (packet_use.isInteract()) {
-                            event.setCancelled(true);
-                            return;
-                        }
-
-                        // If nearby the player, allow standard interaction. Otherwise, do all of this ourselves.
-                        // Minecraft enforces a 3 block radius when not having line of sight, assume this limit.
-                        if (member.getEntity().loc.distanceSquared(eyeLoc) < (3.0 * 3.0)) {
-                            
-                            // For some reason this is needed, though.
-                            if (packet_use.isInteractAt()) {
-                                HumanHand hand = packet_use.getInteractHand(event.getPlayer());
-                                packet_use.setInteract(event.getPlayer(), hand);
-                            }
-
-                            // Must track this to cancel superfluous LEFT clicks that happen later
-                            if (packet_use.isInteract() || packet_use.isInteractAt()) {
-                                this.suppressAttacksFor(event.getPlayer(), ATTACK_SUPPRESS_DURATION);
-                            }
-
-                            // Rewrite the packet
-                            packet_use.setUsedEntityId(member.getEntity().getEntityId());
-                            return; // Allow
-                        }
-
-                        // Cancel the interaction and handle this ourselves.
-                        if (packet_use.isInteract() || packet_use.isInteractAt()) {
-                            // Get hand used for interaction
-                            HumanHand hand = packet_use.getInteractHand(event.getPlayer());
-                            fakeInteraction(member, event.getPlayer(), hand);
-                            event.setCancelled(true);
-                        } else if (packet_use.isAttack()) {
-                            // Attack
-                            fakeAttack(member, event.getPlayer());
-                            event.setCancelled(true);
-                        }
+                    // UseAction INTERACT_AT fires for all entities, including Armorstands
+                    // The INTERACT only fires for interactable entities, like Minecarts
+                    // Since INTERACT_AT also fires for Minecarts, it is easier to ignore INTERACT
+                    // and do all handling using INTERACT_AT.
+                    if (packet_use.isInteract()) {
+                        event.setCancelled(true);
                         return;
                     }
+
+                    // If nearby the player, allow standard interaction. Otherwise, do all of this ourselves.
+                    // Minecraft enforces a 3 block radius when not having line of sight, assume this limit.
+                    if (member.getEntity().loc.distanceSquared(eyeLoc) < (3.0 * 3.0)) {
+
+                        // For some reason this is needed, though.
+                        if (packet_use.isInteractAt()) {
+                            HumanHand hand = packet_use.getInteractHand(event.getPlayer());
+                            packet_use.setInteract(event.getPlayer(), hand);
+                        }
+
+                        // Must track this to cancel superfluous LEFT clicks that happen later
+                        if (packet_use.isInteract() || packet_use.isInteractAt()) {
+                            this.suppressAttacksFor(event.getPlayer(), ATTACK_SUPPRESS_DURATION);
+                        }
+
+                        // Rewrite the packet
+                        packet_use.setUsedEntityId(member.getEntity().getEntityId());
+                        return; // Allow
+                    }
+
+                    // Cancel the interaction and handle this ourselves.
+                    if (packet_use.isInteract() || packet_use.isInteractAt()) {
+                        // Get hand used for interaction
+                        HumanHand hand = packet_use.getInteractHand(event.getPlayer());
+                        fakeInteraction(member, event.getPlayer(), hand);
+                        event.setCancelled(true);
+                    } else if (packet_use.isAttack()) {
+                        // Attack
+                        fakeAttack(member, event.getPlayer());
+                        event.setCancelled(true);
+                    }
+                    return;
                 }
             }
         }
@@ -228,11 +226,10 @@ class TCPacketListener implements PacketListener {
 
             // Fire a Bukkit event first, as defined in PlayerConnection PacketPlayInUseEntity handler
             EquipmentSlot slot = EquipmentSlot.HAND;
+            
             if (hand != mainHand) {
                 // Needed in case it errors out for no reason on MC 1.8 or somesuch
-                try {
-                    slot = EquipmentSlot.OFF_HAND;
-                } catch (Throwable t) {}
+                slot = EquipmentSlot.OFF_HAND;
             }
 
             // Post-1.9: EquipmentSlot parameter

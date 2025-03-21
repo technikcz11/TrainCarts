@@ -13,6 +13,7 @@ import com.bergerkiller.bukkit.tc.Localization;
 import com.bergerkiller.bukkit.tc.Permission;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
+import com.bergerkiller.bukkit.tc.controller.MinecartGroupStore;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
 import com.bergerkiller.bukkit.tc.controller.components.RailState;
@@ -360,7 +361,7 @@ public abstract class SignAction {
         SignAction action = getSignAction(info);
         if (action != null) {
             // First, remove this sign from all Minecarts on the world
-            for (MinecartGroup group : MinecartGroup.getGroups().cloneAsIterable()) {
+            for (MinecartGroup group : MinecartGroupStore.getGroups()) {
                 group.getSignTracker().removeSign(info.getTrackedSign());
             }
 

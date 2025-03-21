@@ -378,7 +378,7 @@ public class GlobalCommands {
         MinecartMember<?> bestMember = null;
         Vector bestPos = null;
         double bestDistance = Double.MAX_VALUE;
-        for (MinecartGroup group : MinecartGroup.getGroups().cloneAsIterable()) {
+        for (MinecartGroup group : MinecartGroupStore.getGroups()) {
             if (group.getWorld() != playerWorld) continue;
             for (MinecartMember<?> member : group) {
                 Vector pos = member.getEntity().loc.vector();

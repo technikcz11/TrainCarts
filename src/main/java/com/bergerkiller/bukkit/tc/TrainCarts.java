@@ -173,7 +173,8 @@ public class TrainCarts extends PluginBase {
             try {
                 Class.forName("com.bergerkiller.bukkit.sl.API.events.SignVariablesDetectEvent");
                 hasEvent = true;
-            } catch (Throwable t) {}
+            } catch (Throwable ignored) {}
+
             if (hasEvent) {
                 variableSuppressionListener = createVariableSuppressionListener();
                 TrainCarts.this.register(variableSuppressionListener);
@@ -992,12 +993,11 @@ public class TrainCarts extends PluginBase {
         //Destroy all LOADED trains after initializing if specified
         //We can't destroy unloaded trains - the asynchronous nature makes it impossible
         if (TCConfig.destroyAllOnShutdown) {
-            try (ImplicitlySharedSet<MinecartGroup> groups = MinecartGroupStore.getGroups().clone()) {
-                for (MinecartGroup group : groups) {
-                    group.destroy();
-                }
-                getLogger().info("[DestroyOnShutdown] Destroyed " + groups.size() + " trains");
+            for (MinecartGroup group : MinecartGroupStore.getGroups()) {
+                group.destroy();
             }
+
+            getLogger().info("[DestroyOnShutdown] Destroyed " + MinecartGroupStore.getGroups().size() + " trains");
         }
 
         // Disable Paper player view distance logic handling
@@ -1083,10 +1083,10 @@ public class TrainCarts extends PluginBase {
 
         //store all forced chunk instances of all groups currently in use
         //this delays unloading the chunks until after all trains have unloaded / controllers disabled
-        List<ForcedChunk> allForcedChunks = new ArrayList<ForcedChunk>();
+        List<ForcedChunk> allForcedChunks = new ArrayList<>();
         try {
             //unload all groups, add their forced chunks to it for safekeeping first
-            for (MinecartGroup mg : MinecartGroup.getGroups().cloneAsIterable()) {
+            for (MinecartGroup mg : MinecartGroupStore.getGroups()) {
                 mg.getChunkArea().getForcedChunks(allForcedChunks);
                 mg.unload();
             }
@@ -1102,7 +1102,8 @@ public class TrainCarts extends PluginBase {
                         }
 
                         // Double-check for groups
-                        MinecartGroup group = MinecartGroup.get(entity);
+                        MinecartGroup group = MinecartGroupStore.get(entity);
+
                         if (group != null) {
                             group.unload();
                         }

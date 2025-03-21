@@ -74,7 +74,7 @@ public class OfflineGroupManager implements TrainCarts.Provider {
 
     public void unloadWorld(World world) {
         ArrayList<MinecartGroup> groupsOnWorld = new ArrayList<>();
-        for (MinecartGroup group : MinecartGroup.getGroups().cloneAsIterable()) {
+        for (MinecartGroup group : MinecartGroupStore.getGroups()) {
             if (group.getWorld() == world) {
                 groupsOnWorld.add(group);
             }
@@ -133,11 +133,11 @@ public class OfflineGroupManager implements TrainCarts.Provider {
         // Make sure to mark this chunks as unloaded, as at this point Bukkit still
         // says it is not.
         long chunkCoordLong = MathUtil.longHashToLong(chunk.getX(), chunk.getZ());
-        lastUnloadChunk = Long.valueOf(chunkCoordLong);
+        lastUnloadChunk = chunkCoordLong;
 
         // Check no trains are keeping the chunk loaded
         World chunkWorld = chunk.getWorld();
-        for (MinecartGroup group : MinecartGroup.getGroups().cloneAsIterable()) {
+        for (MinecartGroup group : MinecartGroupStore.getGroups()) {
             if (group.isInChunk(chunkWorld, chunkCoordLong)) {
                 unloadChunkForGroup(group, chunk);
             }
@@ -352,7 +352,7 @@ public class OfflineGroupManager implements TrainCarts.Provider {
         final int removedLoadedGroupCount;
         {
             int count = 0;
-            for (MinecartGroup g : MinecartGroup.getGroups().cloneAsIterable()) {
+            for (MinecartGroup g : MinecartGroupStore.getGroups()) {
                 if (g.getWorld() == world) {
                     if (!g.isEmpty()) {
                         count++;
@@ -538,7 +538,7 @@ public class OfflineGroupManager implements TrainCarts.Provider {
      */
     public static List<OfflineGroupWorld> saveAllGroups() {
         Map<OfflineWorld, List<OfflineGroup>> worlds = new IdentityHashMap<>();
-        for (MinecartGroup group : MinecartGroupStore.getGroups().cloneAsIterable()) {
+        for (MinecartGroup group : MinecartGroupStore.getGroups()) {
             OfflineGroup offlineGroup = saveGroup(group);
             if (offlineGroup != null) {
                 worlds.computeIfAbsent(offlineGroup.world, w -> new ArrayList<>()).add(offlineGroup);

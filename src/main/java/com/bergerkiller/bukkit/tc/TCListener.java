@@ -76,7 +76,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
-public class TCListener implements Listener {
+public class TCListener implements Listener, MinecartGroupStore.PhysicsChangeable {
     private static final boolean DEBUG_DO_TRACKTEST = false;
     private static final boolean DEBUG_DO_INVISIBLE_TRACK = false;
     private static final long SIGN_CLICK_INTERVAL = 500; // Interval in MS where left-click interaction is allowed
@@ -646,7 +646,7 @@ public class TCListener implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockPhysics(BlockPhysicsEvent event) {
-        MinecartGroupStore.notifyPhysicsChange();
+        notifyPhysicsChange();
         Block block = event.getBlock();
         BlockData blockData = Util.getBlockDataOfPhysicsEvent(event);
 

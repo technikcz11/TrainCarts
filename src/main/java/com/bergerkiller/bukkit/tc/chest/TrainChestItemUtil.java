@@ -583,7 +583,7 @@ public class TrainChestItemUtil {
         if (options.connectWith != null) {
             MinecartMember<?> with = options.spawnMode.isReverseOrder() ? spawnedGroup.head() : spawnedGroup.tail();
             // Order is important! This way, we keep the group of connectWith around. (g2)
-            MinecartGroup.link(with, options.connectWith);
+            MinecartGroupStore.link(with, options.connectWith);
         }
 
         return SpawnResult.SUCCESS;

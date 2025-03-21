@@ -9,6 +9,7 @@ import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
+import com.bergerkiller.bukkit.tc.controller.MinecartGroupStore;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.controller.MinecartMemberStore;
 import com.bergerkiller.bukkit.tc.controller.components.RailJunction;
@@ -886,7 +887,7 @@ public class SignActionEvent extends Event implements Cancellable, TrainCarts.Pr
      * @return Remotely controlled groups
      */
     public Collection<MinecartGroup> getRCTrainGroups() {
-        return MinecartGroup.matchAll(this.getRCName());
+        return MinecartGroupStore.matchAll(getRCName());
     }
 
     /**

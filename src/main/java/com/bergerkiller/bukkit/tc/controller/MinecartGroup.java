@@ -14,33 +14,46 @@ import com.bergerkiller.bukkit.common.utils.CommonUtil;
 import com.bergerkiller.bukkit.common.utils.LogicUtil;
 import com.bergerkiller.bukkit.common.utils.MathUtil;
 import com.bergerkiller.bukkit.common.wrappers.LongHashSet;
+import com.bergerkiller.bukkit.common.wrappers.LongHashSet.LongIterator;
+import com.bergerkiller.bukkit.tc.controller.components.SignTracker;
+import com.bergerkiller.bukkit.tc.exception.GroupUnloadedException;
+import com.bergerkiller.bukkit.tc.exception.MemberMissingException;
 import com.bergerkiller.bukkit.tc.TCConfig;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.attachments.animation.Animation;
 import com.bergerkiller.bukkit.tc.attachments.animation.AnimationOptions;
-import com.bergerkiller.bukkit.tc.controller.components.*;
+import com.bergerkiller.bukkit.tc.controller.components.ActionTrackerGroup;
+import com.bergerkiller.bukkit.tc.controller.components.AnimationController;
+import com.bergerkiller.bukkit.tc.controller.components.AttachmentControllerGroup;
+import com.bergerkiller.bukkit.tc.controller.components.SignTrackerGroup;
+import com.bergerkiller.bukkit.tc.controller.components.ObstacleTracker;
+import com.bergerkiller.bukkit.tc.controller.components.RailState;
 import com.bergerkiller.bukkit.tc.controller.components.RailTracker.TrackedRail;
 import com.bergerkiller.bukkit.tc.controller.components.RailTracker.TrackedRailWalker;
-import com.bergerkiller.bukkit.tc.controller.status.TrainStatus;
-import com.bergerkiller.bukkit.tc.controller.status.TrainStatusProvider;
+import com.bergerkiller.bukkit.tc.controller.components.RailTrackerGroup;
 import com.bergerkiller.bukkit.tc.controller.type.MinecartMemberChest;
 import com.bergerkiller.bukkit.tc.controller.type.MinecartMemberFurnace;
+import com.bergerkiller.bukkit.tc.controller.status.TrainStatus;
+import com.bergerkiller.bukkit.tc.controller.status.TrainStatusProvider;
 import com.bergerkiller.bukkit.tc.events.*;
-import com.bergerkiller.bukkit.tc.exception.GroupUnloadedException;
-import com.bergerkiller.bukkit.tc.exception.MemberMissingException;
-import com.bergerkiller.bukkit.tc.offline.train.OfflineGroup;
-import com.bergerkiller.bukkit.tc.offline.train.OfflineGroupManager;
-import com.bergerkiller.bukkit.tc.properties.*;
+import com.bergerkiller.bukkit.tc.properties.CartPropertiesStore;
+import com.bergerkiller.bukkit.tc.properties.IPropertiesHolder;
+import com.bergerkiller.bukkit.tc.properties.SaveLockOrientationMode;
+import com.bergerkiller.bukkit.tc.properties.TrainProperties;
+import com.bergerkiller.bukkit.tc.properties.TrainPropertiesStore;
 import com.bergerkiller.bukkit.tc.properties.standard.StandardProperties;
 import com.bergerkiller.bukkit.tc.properties.standard.type.CartLockOrientation;
 import com.bergerkiller.bukkit.tc.properties.standard.type.ChunkLoadOptions;
 import com.bergerkiller.bukkit.tc.properties.standard.type.SlowdownMode;
 import com.bergerkiller.bukkit.tc.rails.RailLookup;
+import com.bergerkiller.bukkit.tc.offline.train.OfflineGroup;
+import com.bergerkiller.bukkit.tc.offline.train.OfflineGroupManager;
 import com.bergerkiller.bukkit.tc.signactions.mutex.MutexZoneCache;
 import com.bergerkiller.bukkit.tc.utils.ChunkArea;
 import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
 import com.bergerkiller.generated.net.minecraft.world.level.chunk.ChunkHandle;
+
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -53,33 +66,32 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.Serial;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-public class MinecartGroup extends MinecartGroupStore
-        implements IPropertiesHolder, AnimationController, TrainStatusProvider, TrainCarts.Provider {
-
-    @Serial
-    private static final long serialVersionUID = 3;
+public non-sealed class MinecartGroup extends MinecartGroupMembers implements IPropertiesHolder, AnimationController, TrainStatusProvider, TrainCarts.Provider, MinecartGroupStore.StorableMinecartGroup, MinecartGroupStore.PhysicsChangeable {
     private static final LongHashSet chunksBuffer = new LongHashSet(50);
-
-    private final AttachmentControllerGroup attachmentController = new AttachmentControllerGroup(this);
-    private final ActionTrackerGroup actionTracker = new ActionTrackerGroup(this);
-    private final ObstacleTracker obstacleTracker = new ObstacleTracker(this);
+    private final TrainCarts traincarts;
+    protected final ChunkArea chunkArea = new ChunkArea();
+    private boolean chunkAreaValid = false;
     private final SignTrackerGroup signTracker = new SignTrackerGroup(this);
     private final RailTrackerGroup railTracker = new RailTrackerGroup(this);
-    protected final ChunkArea chunkArea = new ChunkArea();
-    private double updateSpeedFactor = 1.0;
-    private boolean chunkAreaValid = false;
-    private int teleportImmunityTick = 0;
-    private boolean breakPhysics = false;
+    private final ActionTrackerGroup actionTracker = new ActionTrackerGroup(this);
+    private final ObstacleTracker obstacleTracker = new ObstacleTracker(this);
+    private final AttachmentControllerGroup attachmentController = new AttachmentControllerGroup(this);
     private TrainProperties prop = null;
-    private final TrainCarts traincarts;
-    private boolean unloaded = false;
+    private boolean breakPhysics = false;
+    private int teleportImmunityTick = 0;
+    private double updateSpeedFactor = 1.0;
     private int updateStepCount = 1;
     private int updateStepNr = 1;
+    private boolean unloaded = false;
 
     protected MinecartGroup(TrainCarts traincarts) {
         this.traincarts = traincarts;
@@ -185,13 +197,13 @@ public class MinecartGroup extends MinecartGroupStore
     public ConfigurationNode saveConfig(SaveLockOrientationMode setSaveLockMode) {
         // Save train properties getConfig() to a new configuration node copy
         // Omit cart details, overwrite with the member configurations
-        ConfigurationNode savedConfig = getProperties().saveToConfig().clone();
+        ConfigurationNode savedConfig = this.getProperties().saveToConfig().clone();
         savedConfig.remove("carts");
 
         // Save carts
-        List<ConfigurationNode> carts = stream()
+        List<ConfigurationNode> carts = this.stream()
                 .map(MinecartMember::saveConfig)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
 
         if (setSaveLockMode == SaveLockOrientationMode.DISABLED) {
             // If lock orientation mode is DISABLED, strip all carts from locked orientation
@@ -263,18 +275,12 @@ public class MinecartGroup extends MinecartGroupStore
      * when saving
      */
     public boolean isSavedTrainOrientationLocked() {
-        // TODO: optimizations
-        return parallelStream()
-                .map(MinecartMember::getProperties)
-                .anyMatch(p -> p.has(StandardProperties.LOCK_ORIENTATION_FLIPPED));
-
-//        for (MinecartMember<?> member : this) {
-//            if (member.getProperties().get(StandardProperties.LOCK_ORIENTATION_FLIPPED) != CartLockOrientation.NONE) {
-//                return true;
-//            }
-//        }
-//
-//        return false;
+        for (MinecartMember<?> member : this) {
+            if (member.getProperties().get(StandardProperties.LOCK_ORIENTATION_FLIPPED) != CartLockOrientation.NONE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public SignTrackerGroup getSignTracker() {
@@ -329,31 +335,6 @@ public class MinecartGroup extends MinecartGroupStore
         return this.get((int) Math.floor((double) size() / 2));
     }
 
-    public @NotNull Iterator<MinecartMember<?>> iterator() {
-        final Iterator<MinecartMember<?>> listIter = super.iterator();
-
-        return new Iterator<>() {
-            @Override
-            public boolean hasNext() {
-                return listIter.hasNext();
-            }
-
-            @Override
-            public MinecartMember<?> next() {
-                try {
-                    return listIter.next();
-                } catch (ConcurrentModificationException ex) {
-                    throw new MemberMissingException();
-                }
-            }
-
-            @Override
-            public void remove() {
-                listIter.remove();
-            }
-        };
-    }
-
     public boolean connect(MinecartMember<?> contained, MinecartMember<?> with) {
         if (this.size() <= 1) {
             this.add(with);
@@ -387,8 +368,7 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     public boolean isValid() {
-        return !this.isEmpty() && (this.size() == 1 || !this.getProperties().isPoweredMinecartRequired()
-                || this.size(EntityType.MINECART_FURNACE) > 0);
+        return !this.isEmpty() && (this.size() == 1 || !this.getProperties().isPoweredMinecartRequired() || this.size(EntityType.MINECART_FURNACE) > 0);
     }
 
     @Override
@@ -406,15 +386,19 @@ public class MinecartGroup extends MinecartGroupStore
         if (member.isUnloaded()) {
             throw new IllegalArgumentException("Can not add unloaded members to groups");
         }
-        super.add(member);
+
+        if(!super.add(member)) return false;
+
         this.fireMemberAddEvent(member);
         this.onMemberAdded(member);
         return true;
     }
 
     @Override
-    public boolean addAll(int index, Collection<? extends MinecartMember<?>> members) {
-        super.addAll(index, members);
+    public boolean addAll(int index, @NotNull Collection<? extends MinecartMember<?>> members) {
+        if(!super.addAll(index, members)) {
+            return false;
+        }
 
         for (MinecartMember<?> m : members) {
             if (m.isUnloaded()) {
@@ -430,8 +414,10 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     @Override
-    public boolean addAll(Collection<? extends MinecartMember<?>> members) {
-        super.addAll(members);
+    public boolean addAll(@NotNull Collection<? extends MinecartMember<?>> members) {
+        if(!super.addAll(members)) {
+            return false;
+        }
 
         for (MinecartMember<?> m : members) {
             if (m.isUnloaded()) {
@@ -455,13 +441,15 @@ public class MinecartGroup extends MinecartGroupStore
      */
     public boolean removeSilent(MinecartMember<?> member) {
         int index = this.indexOf(member);
-        if (index == -1) {
-            return false;
+        if (index == -1) return false;
+
+        removeMember(index);
+
+        if (isEmpty()) {
+            remove();
         }
-        this.removeMember(index);
-        if (this.isEmpty()) {
-            this.remove();
-        }
+
+
         return true;
     }
 
@@ -555,10 +543,8 @@ public class MinecartGroup extends MinecartGroupStore
      */
     public MinecartGroup split(int at) {
         Util.checkMainThread("MinecartGroup::split()");
-        if (at <= 0)
-            return this;
-        if (at >= this.size())
-            return null;
+        if (at <= 0) return this;
+        if (at >= this.size()) return null;
 
         // Remove carts split off and create a new group using them
         MinecartGroup gnew;
@@ -591,6 +577,7 @@ public class MinecartGroup extends MinecartGroupStore
         unregisterFromServer(false);
 
         final TrainProperties properties = this.getProperties();
+
         for (MinecartMember<?> mm : this) {
             properties.remove(mm.getProperties());
             if (mm.getEntity().isRemoved()) {
@@ -609,7 +596,7 @@ public class MinecartGroup extends MinecartGroupStore
 
     public void remove() {
         Util.checkMainThread("MinecartGroup::remove()");
-        if (!groups.remove(this)) {
+        if (!removeSelfFromGroups()) {
             return; // Already removed
         }
 
@@ -680,7 +667,7 @@ public class MinecartGroup extends MinecartGroupStore
             // occurs!
             this.stop(false);
         } finally {
-            groups.remove(this);
+            removeSelfFromGroups();
         }
 
         for (MinecartMember<?> member : this) {
@@ -760,8 +747,7 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     public void eject() {
-        for (MinecartMember<?> mm : this)
-            mm.eject();
+        for (MinecartMember<?> mm : this) mm.eject();
     }
 
     /**
@@ -778,9 +764,8 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     public void teleport(Block start, BlockFace direction) {
-        TrackWalkingPoint walker = new TrackWalkingPoint(start, direction);
         Location[] locations = new Location[this.size()];
-
+        TrackWalkingPoint walker = new TrackWalkingPoint(start, direction);
         walker.skipFirst();
         for (int i = 0; i < locations.length; i++) {
             boolean canMove;
@@ -789,7 +774,6 @@ public class MinecartGroup extends MinecartGroupStore
             } else {
                 canMove = walker.move(get(i - 1).getPreferredDistance(get(i)));
             }
-
             if (canMove) {
                 locations[i] = walker.state.positionLocation();
             } else if (i > 0) {
@@ -801,8 +785,8 @@ public class MinecartGroup extends MinecartGroupStore
         this.teleport(locations, true);
     }
 
-    public void teleport(List<Location> locations) {
-        this.teleport(locations.toArray(new Location[0]), false);
+    public void teleport(Location[] locations) {
+        this.teleport(locations, false);
     }
 
     public void teleport(Location[] locations, boolean reversed) {
@@ -1110,7 +1094,7 @@ public class MinecartGroup extends MinecartGroupStore
         } else if (this.size() == 1) {
             return this.get(0).getAnimationNames();
         } else {
-            return stream()
+            return this.stream()
                     .flatMap(m -> m.getAnimationNames().stream())
                     .distinct()
                     .toList();
@@ -1121,10 +1105,10 @@ public class MinecartGroup extends MinecartGroupStore
     public Set<String> getAnimationScenes(String animationName) {
         if (this.isEmpty()) {
             return Collections.emptySet();
-        } else if (this.size() == 1) {
-            return this.get(0).getAnimationScenes(animationName);
+        } else if (size() == 1) {
+            return get(0).getAnimationScenes(animationName);
         } else {
-            return this.stream()
+            return stream()
                     .flatMap(m -> m.getAnimationScenes(animationName).stream())
                     .collect(Collectors.toUnmodifiableSet());
         }
@@ -1151,8 +1135,6 @@ public class MinecartGroup extends MinecartGroupStore
      */
     @Override
     public boolean playNamedAnimation(AnimationOptions options) {
-        // return parallelStream().anyMatch(m -> m.playNamedAnimation(options));
-
         for (MinecartMember<?> member : this) {
             if (member.playNamedAnimation(options)) {
                 return true;
@@ -1164,29 +1146,33 @@ public class MinecartGroup extends MinecartGroupStore
 
     @Override
     public boolean playNamedAnimationFor(int[] targetPath, AnimationOptions options) {
-        boolean success = false;
         for (MinecartMember<?> member : this) {
-            success |= member.playNamedAnimationFor(targetPath, options);
+            if (member.playNamedAnimationFor(targetPath, options)) {
+                return true;
+            }
         }
-        return success;
+
+        return false;
     }
 
     @Override
     public boolean playAnimationFor(int[] targetPath, Animation animation) {
-        boolean success = false;
         for (MinecartMember<?> member : this) {
-            success |= member.playAnimationFor(targetPath, animation);
+            if (member.playAnimationFor(targetPath, animation)) {
+                return true;
+            }
         }
-        return success;
+
+        return false;
     }
 
     public boolean canConnect(MinecartMember<?> mm, int at) {
-        if (this.size() == 1)
-            return true;
-        if (this.size() == 0)
-            return false;
+        if (size() == 1) return true;
+        if (size() == 0) return false;
+
         CommonMinecart<?> connectedEnd;
         CommonMinecart<?> otherEnd;
+
         if (at == 0) {
             // Compare the head
             if (!this.head().isNearOf(mm)) {
@@ -1221,50 +1207,56 @@ public class MinecartGroup extends MinecartGroupStore
     private void refreshRailTrackerIfChanged() {
         // Go by all the Minecarts and check whether the position since last time has changed
         for (MinecartMember<?> member : this) {
-            hasPhysicsChanges |= member.railDetectPositionChange();
+            if (member.railDetectPositionChange()) {
+                notifyPhysicsChange();
+            }
         }
 
         // If changed, reset and refresh rails
-        if (hasPhysicsChanges) {
-            hasPhysicsChanges = false;
+        if (hasPhysicsChanges()) {
+            resetPhysicsChanges();
             this.getRailTracker().refresh();
         }
     }
 
     public void updateDirection() {
-        /* Timings: updateDirection (Train Physics) */
+        /* Timings: updateDirection  (Train Physics) */
 
-        if (this.size() == 1) {
+        if (isEmpty()) return;
+
+        if (size() == 1) {
             this.refreshRailTrackerIfChanged();
             this.head().updateDirection();
-        } else if (this.size() > 1) {
-            int reverseCtr = 0;
-            while (true) {
-                this.refreshRailTrackerIfChanged();
+            return;
+        }
 
-                // Update direction of individual carts
-                for (MinecartMember<?> member : this) {
-                    member.updateDirection();
-                }
+        int reverseCtr = 0;
 
-                // Handle train reversing (with maximum 2 attempts)
-                if (reverseCtr++ == 2) {
-                    break;
-                }
-                double fforce = 0;
-                for (MinecartMember<?> m : this) {
-                    // Use rail tracker instead of recalculating for improved performance
-                    // fforce += m.getForwardForce();
+        while (true) {
+            this.refreshRailTrackerIfChanged();
 
-                    VectorAbstract vel = m.getEntity().vel;
-                    fforce += m.getRailTracker().getState().position().motDot(vel.getX(), vel.getY(), vel.getZ());
-                }
-                if (fforce >= 0) {
-                    break;
-                } else {
-                    reverseDataStructures();
-                    notifyPhysicsChange();
-                }
+            // Update direction of individual carts
+            for (MinecartMember<?> member : this) {
+                member.updateDirection();
+            }
+
+            // Handle train reversing (with maximum 2 attempts)
+            if (reverseCtr++ == 2) {
+                break;
+            }
+            double fforce = 0;
+            for (MinecartMember<?> m : this) {
+                // Use rail tracker instead of recalculating for improved performance
+                // fforce += m.getForwardForce();
+
+                VectorAbstract vel = m.getEntity().vel;
+                fforce += m.getRailTracker().getState().position().motDot(vel.getX(), vel.getY(), vel.getZ());
+            }
+            if (fforce >= 0) {
+                break;
+            } else {
+                reverseDataStructures();
+                notifyPhysicsChange();
             }
         }
     }
@@ -1311,25 +1303,39 @@ public class MinecartGroup extends MinecartGroupStore
      * @return average (forward) force
      */
     public double getAverageForce() {
-        if (this.isEmpty()) {
-            return 0;
-        }
-        if (this.size() == 1) {
-            return this.get(0).getForce();
-        }
-        // Get the average forward force of all carts
-        double force = 0;
-        for (MinecartMember<?> m : this) {
-            force += m.getForwardForce();
-        }
-        return force / (double) size();
+        //TODO: Optimization
+
+        return stream()
+                .mapToDouble(MinecartMember::getForwardForce)
+                .average()
+                .orElse(0);
+
+//        if (this.isEmpty()) {
+//            return 0;
+//        }
+//        if (this.size() == 1) {
+//            return this.get(0).getForce();
+//        }
+//        return stream()
+//                .mapToDouble(MinecartMember::getForwardForce)
+//                .average()
+//                .getAsDouble();
+//
+//        //Get the average forward force of all carts
+//        double force = 0;
+//        for (MinecartMember<?> m : this) {
+//            force += m.getForwardForce();
+//        }
+//        return force / (double) size();
     }
 
     public List<Material> getTypes() {
-        ArrayList<Material> types = new ArrayList<>(this.size());
+        List<Material> types = new ArrayList<>(size());
+
         for (MinecartMember<?> mm : this) {
             types.add(mm.getEntity().getCombinedItem());
         }
+
         return types;
     }
 
@@ -1339,6 +1345,7 @@ public class MinecartGroup extends MinecartGroupStore
                 return true;
             }
         }
+
         return false;
     }
 
@@ -1374,8 +1381,7 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     /**
-     * Gets whether this train is moving, or waiting on a station or other sign
-     * mechanic.
+     * Gets whether this train is moving, or waiting on a station or other sign mechanic.
      *
      * @return Moving or waiting
      */
@@ -1384,41 +1390,28 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     /**
-     * Checks if this Minecart Group can unload, or if chunks are kept loaded
-     * instead<br>
-     * The keepChunksLoaded property is read, as well the moving state if
-     * configured<br>
+     * Checks if this Minecart Group can unload, or if chunks are kept loaded instead<br>
+     * The keepChunksLoaded property is read, as well the moving state if configured<br>
      * If a player is inside the train, it will keep the chunks loaded as well
      *
      * @return True if it can unload, False if it keeps chunks loaded
      */
     public boolean canUnload() {
-        if (this.getProperties().isKeepingChunksLoaded()
-                && (!TCConfig.keepChunksLoadedOnlyWhenMoving || this.isMovingOrWaiting())) {
-            return false;
+        if (this.getProperties().isKeepingChunksLoaded()) {
+            if (!TCConfig.keepChunksLoadedOnlyWhenMoving || this.isMovingOrWaiting()) {
+                return false;
+            }
         }
-
-        // TODO: optimizations
-        boolean hasPassengers = parallelStream()
-                .map(CommonEntityController::getEntity)
-                .filter(Objects::nonNull)
-                .anyMatch(ExtendedEntity::hasPlayerPassenger);
-
-        if (!hasPassengers) {
-            return false;
+        for (MinecartMember<?> member : this) {
+            if (member.getEntity() != null && member.getEntity().hasPlayerPassenger()) {
+                return false;
+            }
         }
-
-//        for (MinecartMember<?> member : this) {
-//            if (member.getEntity() != null && member.getEntity().hasPlayerPassenger()) {
-//                return false;
-//            }
-//        }
-
         return !this.isTeleportImmune();
     }
 
     public boolean isRemoved() {
-        return !groups.contains(this);
+        return !isInGroups();
     }
 
     /**
@@ -1460,8 +1453,7 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     /**
-     * Gets the chunk area around this train. This is the area kept loaded if chunks
-     * are kept loaded,
+     * Gets the chunk area around this train. This is the area kept loaded if chunks are kept loaded,
      * or the chunks that when unloaded, will cause the train to unload if not.
      *
      * @return chunk area
@@ -1481,22 +1473,14 @@ public class MinecartGroup extends MinecartGroupStore
             // Slow calculation as a fallback when the chunkArea is outdated
             int center_chunkX = MathUtil.longHashMsw(chunkLongCoord);
             int center_chunkZ = MathUtil.longHashLsw(chunkLongCoord);
-
-            for (long chunk : loadChunksBuffer()) {
+            LongIterator chunkIter = this.loadChunksBuffer().longIterator();
+            while (chunkIter.hasNext()) {
+                long chunk = chunkIter.next();
                 if (Math.abs(MathUtil.longHashMsw(chunk) - center_chunkX) <= 2 &&
                         Math.abs(MathUtil.longHashLsw(chunk) - center_chunkZ) <= 2) {
                     return true;
                 }
             }
-
-            // LongIterator chunkIter = this.loadChunksBuffer().longIterator();
-            // while (chunkIter.hasNext()) {
-            // long chunk = chunkIter.next();
-            // if (Math.abs(MathUtil.longHashMsw(chunk) - center_chunkX) <= 2 &&
-            // Math.abs(MathUtil.longHashLsw(chunk) - center_chunkZ) <= 2) {
-            // return true;
-            // }
-            // }
             return false;
         }
     }
@@ -1504,7 +1488,6 @@ public class MinecartGroup extends MinecartGroupStore
     @Override
     public void onPropertiesChanged() {
         this.getSignTracker().update();
-
         for (MinecartMember<?> member : this) {
             member.onPropertiesChanged();
         }
@@ -1524,37 +1507,25 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     /**
-     * Gets the speed factor that is applied to all velocity and movement updates in
-     * the current update.<br>
+     * Gets the speed factor that is applied to all velocity and movement updates in the current update.<br>
      * <br>
      * <b>Explanation:</b><br>
-     * When a train moves faster than 0.4 blocks/tick, the update is split into
-     * several update steps per tick.
-     * This prevents nasty derailing and makes sure that block-by-block motion can
-     * still occur. In a single tick
-     * the train moves 5 blocks, which is done by doing 8 or so actual update steps.
-     * The update speed factor
+     * When a train moves faster than 0.4 blocks/tick, the update is split into several update steps per tick.
+     * This prevents nasty derailing and makes sure that block-by-block motion can still occur. In a single tick
+     * the train moves 5 blocks, which is done by doing 8 or so actual update steps. The update speed factor
      * specifies the multiplier to apply to speeds for the current update.<br>
      * <br>
-     * When moving 0.4 b/t and under, this value will always be 1.0 (one update).
-     * Above it, it will be
-     * set to an increasingly small number 1/stepcount. Outside of the physics
-     * function, the factor will always be 1.0.<br>
+     * When moving 0.4 b/t and under, this value will always be 1.0 (one update). Above it, it will be
+     * set to an increasingly small number 1/stepcount. Outside of the physics function, the factor will always be 1.0.<br>
      * <br>
      * <b>When to use</b><br>
-     * This factor should only be used when applying an absolute velocity. For
-     * example, when
-     * a launcher sign uses a certain desired velocity, this speed factor must be
-     * used to make sure it is correctly applied.
-     * Say we want a speed of "2.4", and the update is split in 6 (f=0.1666), we
-     * should apply <i>2.4*0.1666=0.4</i>. When all
-     * updates finish, the velocities are corrected and will be set to the 2.4 that
-     * was requested.<br>
+     * This factor should only be used when applying an absolute velocity. For example, when
+     * a launcher sign uses a certain desired velocity, this speed factor must be used to make sure it is correctly applied.
+     * Say we want a speed of "2.4", and the update is split in 6 (f=0.1666), we should apply <i>2.4*0.1666=0.4</i>. When all
+     * updates finish, the velocities are corrected and will be set to the 2.4 that was requested.<br>
      * <br>
-     * However, when a velocity is taken over from inside the physics loop, this
-     * factor should <b>not</b> be used.
-     * For example, if you want to do <i>velocity = velocity * 0.95</i> the original
-     * velocity is already factored,
+     * However, when a velocity is taken over from inside the physics loop, this factor should <b>not</b> be used.
+     * For example, if you want to do <i>velocity = velocity * 0.95</i> the original velocity is already factored,
      * and no update speed factor should be applied again.
      *
      * @return Update speed factor
@@ -1564,8 +1535,7 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     /**
-     * Gets the total number of physics updates performed per tick. See also the
-     * information
+     * Gets the total number of physics updates performed per tick. See also the information
      * of {@link #getUpdateSpeedFactor()}.
      *
      * @return update step count (normally 1)
@@ -1664,7 +1634,7 @@ public class MinecartGroup extends MinecartGroupStore
     private boolean doConnectionCheck() {
         // Check all railed minecarts follow the same tracks
         // This is important for switcher/junction split logic
-        for (int i = 0; i < size() - 1; i++) {
+        for (int i = 0; i < this.size() - 1; i++) {
             // (!get(i + 1).isFollowingOnTrack(get(i))) {
             if (get(i).getRailTracker().isTrainSplit()) {
                 // Undo stepcount based velocity modifications
@@ -1674,8 +1644,8 @@ public class MinecartGroup extends MinecartGroupStore
                 // Split
                 MinecartGroup gnew = this.split(i + 1);
                 if (gnew != null) {
-                    // what time do we want to prevent them from colliding too soon?
-                    // needs to travel 2 blocks in the meantime
+                    //what time do we want to prevent them from colliding too soon?
+                    //needs to travel 2 blocks in the meantime
                     int time = (int) MathUtil.clamp(2 / gnew.head().getRealSpeed(), 20, 40);
                     for (MinecartMember<?> mm1 : gnew) {
                         for (MinecartMember<?> mm2 : this) {
@@ -1702,8 +1672,7 @@ public class MinecartGroup extends MinecartGroupStore
         return true;
     }
 
-    // loads the static chunksBuffer with the chunk coordinates of the minecarts of
-    // this group
+    // loads the static chunksBuffer with the chunk coordinates of the minecarts of this group
     private LongHashSet loadChunksBuffer() {
         chunksBuffer.clear();
         for (MinecartMember<?> mm : this) {
@@ -1720,36 +1689,28 @@ public class MinecartGroup extends MinecartGroupStore
 
         // When keep chunks loaded is active, make sure to enforce that right away
         // If we do it next tick a chunk could unload before we can do so
-        // Do not do this for normal unloading logic, as that may unload the train in
-        // there (this should be later)
+        // Do not do this for normal unloading logic, as that may unload the train in there (this should be later)
         if (this.getProperties().isKeepingChunksLoaded()) {
             this.updateChunkInformation(true, false);
         }
     }
 
     /**
-     * Refreshes the chunks this train is occupying. When the train keeps chunks
-     * loaded,
+     * Refreshes the chunks this train is occupying. When the train keeps chunks loaded,
      * makes sure to load the new chunks and allow old chunks to unload again.
      *
-     * @param keepChunksLoaded Whether to keep chunks loaded, or track train
-     *                         unloading (DISABLED mode)
-     * @param isRemoving       When true, the train is in process of being removed,
-     *                         and no logic
-     *                         besides refreshing the chunk area should be
-     *                         performed.
+     * @param keepChunksLoaded Whether to keep chunks loaded, or track train unloading (DISABLED mode)
+     * @param isRemoving When true, the train is in process of being removed, and no logic
+     *                   besides refreshing the chunk area should be performed.
      */
     private void updateChunkInformation(boolean keepChunksLoaded, boolean isRemoving) {
-        /* Timings: updateChunkInformation (Train Physics) */
+        /* Timings: updateChunkInformation  (Train Physics) */
 
-        // If kept loaded, use the chunk loader radius limited by the globally
-        // configured limit (abuse!)
-        // If not kept loaded, default to unloading the train when one of the 5x5 chunk
-        // area the carts
+        // If kept loaded, use the chunk loader radius limited by the globally configured limit (abuse!)
+        // If not kept loaded, default to unloading the train when one of the 5x5 chunk area the carts
         // occupy unloads.
         ChunkLoadOptions options = keepChunksLoaded ? getProperties().getChunkLoadOptions() : ChunkLoadOptions.DEFAULT;
-        int radius = keepChunksLoaded ? Math.min(TCConfig.maxKeepChunksLoadedRadius, options.radius())
-                : ChunkArea.CHUNK_RANGE;
+        int radius = keepChunksLoaded ? Math.min(TCConfig.maxKeepChunksLoadedRadius, options.radius()) : ChunkArea.CHUNK_RANGE;
 
         // Refresh the chunk area tracker using this information
         this.chunkArea.refresh(this.getWorld(), radius, this.loadChunksBuffer());
@@ -1778,7 +1739,6 @@ public class MinecartGroup extends MinecartGroupStore
                 }
             }
         }
-
     }
 
     public void logCartInfo(String header) {
@@ -1794,10 +1754,8 @@ public class MinecartGroup extends MinecartGroupStore
     }
 
     /**
-     * Gets the obstacle avoidance tracker. This tracker searches the rails up ahead
-     * of this
-     * train to find other trains, mutex zones, or other types of obstacles. It then
-     * maintains
+     * Gets the obstacle avoidance tracker. This tracker searches the rails up ahead of this
+     * train to find other trains, mutex zones, or other types of obstacles. It then maintains
      * a speed limit to avoid colliding with it.
      *
      * @return Obstacle tracker
@@ -1810,10 +1768,9 @@ public class MinecartGroup extends MinecartGroupStore
      * Gets the distance and speed of all obstacles up ahead on the tracks.
      * This can be another train, or a mutex zone that blocks further movement.
      *
-     * @param distance      The distance in blocks to check for obstacles
-     * @param trains        Whether to include other trains up ahead in the results
-     * @param railObstacles Whether to include rail obstacles, like mutex zones, in
-     *                      the results
+     * @param distance The distance in blocks to check for obstacles
+     * @param trains Whether to include other trains up ahead in the results
+     * @param railObstacles Whether to include rail obstacles, like mutex zones, in the results
      * @return obstacle found within this distance, null if there is none
      */
     public List<ObstacleTracker.Obstacle> findObstaclesAhead(double distance, boolean trains, boolean railObstacles) {
@@ -1824,10 +1781,9 @@ public class MinecartGroup extends MinecartGroupStore
      * Checks whether there are any obstacles up ahead on the tracks.
      * This can be another train, or a mutex zone that blocks further movement.
      *
-     * @param distance      to look for trains ahead
-     * @param trains        Whether to include other trains up ahead in the results
-     * @param railObstacles Whether to include rail obstacles, like mutex zones, in
-     *                      the results
+     * @param distance to look for trains ahead
+     * @param trains Whether to include other trains up ahead in the results
+     * @param railObstacles Whether to include rail obstacles, like mutex zones, in the results
      * @return True if a matched obstacle is up ahead, False if not
      * @see #findObstaclesAhead(double, boolean, boolean)
      */
@@ -1842,8 +1798,7 @@ public class MinecartGroup extends MinecartGroupStore
      * If a wait distance is configured, then it will also check for other trains.
      *
      * @param distance Distance to look for trains up ahead
-     * @return Found obstacle speed limit. Can be
-     * {@link ObstacleTracker.ObstacleSpeedLimit#NONE}
+     * @return Found obstacle speed limit. Can be {@link ObstacleTracker.ObstacleSpeedLimit#NONE}
      */
     public ObstacleTracker.ObstacleSpeedLimit findObstacleSpeedLimit(double distance) {
         return findObstacleSpeedLimit(distance, getProperties().getWaitDeceleration());
@@ -1855,20 +1810,18 @@ public class MinecartGroup extends MinecartGroupStore
      * closest obstacle at the specified deceleration rate.
      * If a wait distance is configured, then it will also check for other trains.
      *
-     * @param distance     Distance to look for trains up ahead
+     * @param distance Distance to look for trains up ahead
      * @param deceleration Maximum rate of deceleration in blocks/tick^2
-     * @return Found obstacle speed limit. Can be
-     * {@link ObstacleTracker.ObstacleSpeedLimit#NONE}
+     * @return Found obstacle speed limit. Can be {@link ObstacleTracker.ObstacleSpeedLimit#NONE}
      */
     public ObstacleTracker.ObstacleSpeedLimit findObstacleSpeedLimit(double distance, double deceleration) {
         double waitDistance = getProperties().getWaitDistance();
-        List<ObstacleTracker.Obstacle> obstacles = this.obstacleTracker.findObstaclesAhead(distance, waitDistance > 0.0,
-                true, waitDistance);
+        List<ObstacleTracker.Obstacle> obstacles = this.obstacleTracker.findObstaclesAhead(distance, waitDistance > 0.0, true, waitDistance);
         return ObstacleTracker.minimumSpeedLimit(obstacles, deceleration);
     }
 
     private void tickActions() {
-        /* Timings: tickActions (Train Physics) */
+        /* Timings: tickActions  (Train Physics) */
         {
             this.getActions().doTick();
         }
@@ -1878,14 +1831,13 @@ public class MinecartGroup extends MinecartGroupStore
         // NOP if unloaded
         // This should never happen, so remove the group as a precaution
         // Somehow it got re-added again.
-        if (this.isUnloaded()) {
-            groups.remove(this);
+        if (isUnloaded()) {
+            removeSelfFromGroups();
             return;
         }
 
         // Remove minecarts from this group that don't actually belong to this group
-        // This is a fallback/workaround for a reported resource bug where fake trains
-        // are created
+        // This is a fallback/workaround for a reported resource bug where fake trains are created
 
         for (int i = 0; i < this.size(); i++) {
             MinecartMember<?> member = super.get(i);
@@ -1949,8 +1901,7 @@ public class MinecartGroup extends MinecartGroupStore
             double totalforce = this.getAverageForce();
             double speedlimit = this.getProperties().getSpeedLimit();
             double realtimeFactor = this.getProperties().hasRealtimePhysics()
-                    ? plugin.getTrainUpdateController().getRealtimeFactor()
-                    : 1.0;
+                    ? plugin.getTrainUpdateController().getRealtimeFactor() : 1.0;
 
             if ((realtimeFactor * totalforce) > 0.4 && (realtimeFactor * speedlimit) > 0.4) {
                 this.updateStepCount = (int) Math.ceil((realtimeFactor * speedlimit) / 0.4);
@@ -1975,8 +1926,7 @@ public class MinecartGroup extends MinecartGroupStore
             }
 
             // Restore velocity / max speed to what is exposed outside the physics function
-            // Use the speed factor for this, since the max speed may have been changed
-            // during the physics update
+            // Use the speed factor for this, since the max speed may have been changed during the physics update
             // This can happen with, for example, the use of waitDistance
             for (MinecartMember<?> mm : this) {
                 mm.getEntity().vel.divide(this.updateSpeedFactor);
@@ -1988,10 +1938,8 @@ public class MinecartGroup extends MinecartGroupStore
 
             this.updateSpeedFactor = 1.0;
 
-            // Server bugfix: prevents an old Minecart duplicate staying behind inside a
-            // chunk when saved
-            // This issue has been resolved on Paper, see
-            // https://github.com/PaperMC/Paper/issues/1223
+            // Server bugfix: prevents an old Minecart duplicate staying behind inside a chunk when saved
+            // This issue has been resolved on Paper, see https://github.com/PaperMC/Paper/issues/1223
             for (MinecartMember<?> mm : this) {
                 CommonEntity<?> entity = mm.getEntity();
                 if (entity.isInLoadedChunk()) {
@@ -2004,11 +1952,10 @@ public class MinecartGroup extends MinecartGroupStore
             }
 
         } catch (GroupUnloadedException ex) {
-            // this group is gone
+            //this group is gone
         } catch (Throwable t) {
             final TrainProperties p = getProperties();
-            plugin.log(Level.SEVERE,
-                    "Failed to perform physics on train '" + p.getTrainName() + "' at " + p.getLocation() + ":");
+            plugin.log(Level.SEVERE, "Failed to perform physics on train '" + p.getTrainName() + "' at " + p.getLocation() + ":");
             plugin.handle(t);
         }
     }
@@ -2025,12 +1972,11 @@ public class MinecartGroup extends MinecartGroupStore
             // Validate members and set max speed
             // We must limit it to 0.4, otherwise derailment can occur when the
             // minecart speeds up inside the physics update function
-            {
-                double speedLimitClamped = Math.min(this.getProperties().getSpeedLimit() * this.updateSpeedFactor, 0.4);
-                for (MinecartMember<?> mm : this) {
-                    mm.checkMissing();
-                    mm.getEntity().setMaxSpeed(speedLimitClamped);
-                }
+
+            double speedLimitClamped = Math.min(this.getProperties().getSpeedLimit() * this.updateSpeedFactor, 0.4);
+            for (MinecartMember<?> mm : this) {
+                mm.checkMissing();
+                mm.getEntity().setMaxSpeed(speedLimitClamped);
             }
 
             // Set up a valid network controller if needed
@@ -2047,8 +1993,7 @@ public class MinecartGroup extends MinecartGroupStore
             this.updateDirection();
             this.getSignTracker().refresh();
 
-            // Perform block change Minecart logic, also take care of potential new block
-            // changes
+            // Perform block change Minecart logic, also take care of potential new block changes
             for (MinecartMember<?> member : this) {
                 member.checkMissing();
                 if (member.hasBlockChanged() | member.forcedBlockUpdate.clear()) {
@@ -2060,11 +2005,12 @@ public class MinecartGroup extends MinecartGroupStore
                     member.checkMissing();
                 }
             }
+
             this.getSignTracker().refresh();
 
             this.updateDirection();
             if (!this.doConnectionCheck()) {
-                return true; // false;
+                return true; //false;
             }
 
             this.tickActions();
@@ -2077,31 +2023,25 @@ public class MinecartGroup extends MinecartGroupStore
             }
 
             // Perform velocity updates
-            /* Timings: onPhysicsPreMove (Train Physics) */
-            {
-                for (MinecartMember<?> member : this) {
-                    member.onPhysicsPreMove();
-                }
+            /* Timings: onPhysicsPreMove  (Train Physics) */
+            for (MinecartMember<?> member : this) {
+                member.onPhysicsPreMove();
             }
 
             // Stop if all dead
-            if (this.isEmpty()) {
+            if (isEmpty()) {
                 return false;
             }
 
             // Add the gravity effects right before moving the Minecart
             // This changes velocity slightly so that minecarts go downslope or fall down
             // It is important to do it here, so that gravity is taken into account
-            // when sliding over the ground. Doing this in the wrong spot will make the
-            // minecart 'hover'.
-            if (this.getProperties().isSlowingDown(SlowdownMode.GRAVITY)) {
-                double usf_sq = this.getProperties().getGravity() * this.getUpdateSpeedFactor()
-                        * this.getUpdateSpeedFactor();
+            // when sliding over the ground. Doing this in the wrong spot will make the minecart 'hover'.
+            if (getProperties().isSlowingDown(SlowdownMode.GRAVITY)) {
+                double usf_sq = this.getProperties().getGravity() * this.getUpdateSpeedFactor() * this.getUpdateSpeedFactor();
                 for (MinecartMember<?> member : this) {
-                    if (member.isUnloaded())
-                        continue; // not loaded - no physics occur
-                    if (member.isMovementControlled())
-                        continue; // launched by station, launcher, etc.
+                    if (member.isUnloaded()) continue; // not loaded - no physics occur
+                    if (member.isMovementControlled()) continue; // launched by station, launcher, etc.
 
                     // Find segment of the rails path the Minecart is on
                     member.getRailLogic().onGravity(member, usf_sq);
@@ -2109,26 +2049,25 @@ public class MinecartGroup extends MinecartGroupStore
             }
 
             // Direction can change as a result of gravity
-            this.updateDirection();
+            updateDirection();
 
             // Pre-movement rail updates. Must be done after gravity, otherwise
             // trains slide down unpowered powered rails. We can't move gravity, because
-            // the rail logic pre-move logic must occur first (snap to rails) for proper
-            // calculations.
+            // the rail logic pre-move logic must occur first (snap to rails) for proper calculations.
             for (MinecartMember<?> member : this) {
                 member.getRailTracker().getRailType().onPreMove(member);
             }
 
             // Rail Type preMove can change it (i.e. powered rail)
-            this.updateDirection();
+            updateDirection();
 
             // Share forward force between all the Minecarts when size > 1
             double forwardMovingSpeed;
             if (this.size() > 1) {
-                // Get the average forwarding force of all carts
+                //Get the average forwarding force of all carts
                 forwardMovingSpeed = this.getAverageForce();
 
-                // Perform forward force or not? First check if we are not messing up...
+                //Perform forward force or not? First check if we are not messing up...
                 boolean performUpdate = true;
                 for (int i = 0; i < this.size() - 1; i++) {
                     if (get(i).getRailTracker().isTrainSplit()) {
@@ -2138,7 +2077,7 @@ public class MinecartGroup extends MinecartGroupStore
                 }
 
                 if (performUpdate) {
-                    // update force
+                    //update force
                     for (MinecartMember<?> m : this) {
                         m.setForwardForce(forwardMovingSpeed);
                     }
@@ -2147,71 +2086,64 @@ public class MinecartGroup extends MinecartGroupStore
                 forwardMovingSpeed = this.head().getForce();
             }
 
-            // If a wait distance is set, check for trains ahead of the track and wait for
-            // those
-            // We do the waiting by setting the max speed of the train (NOT speed limit!) to
-            // match that train's speed
+            // If a wait distance is set, check for trains ahead of the track and wait for those
+            // We do the waiting by setting the max speed of the train (NOT speed limit!) to match that train's speed
             // It is important speed of this train is updated before doing these checks.
-            /* Timings: getSpeedAhead (Train Physics) */
-            if (isFirstUpdateStep()) {
-                this.obstacleTracker.update(forwardMovingSpeed / getUpdateSpeedFactor());
-            }
-            double limitedSpeed = this.obstacleTracker.getSpeedLimit();
+            /* Timings: getSpeedAhead  (Train Physics) */
+            {
+                if (isFirstUpdateStep()) {
+                    obstacleTracker.update(forwardMovingSpeed / getUpdateSpeedFactor());
+                }
 
-            // If not blocked, re-apply the speed limit as this may have changed during this
-            // tick!
-            if (limitedSpeed == Double.MAX_VALUE) {
-                limitedSpeed = this.getProperties().getSpeedLimit();
+                double limitedSpeed = obstacleTracker.getSpeedLimit();
+
+                // If not blocked, re-apply the speed limit as this may have changed during this tick!
+                if (limitedSpeed == Double.MAX_VALUE) {
+                    limitedSpeed = this.getProperties().getSpeedLimit();
+                }
+
+                // Apply to the carts. Take speed factor into account, limit to at most 0.4 block movement
+                limitedSpeed = Math.min(0.4, this.updateSpeedFactor * limitedSpeed);
+                for (MinecartMember<?> mm : this) {
+                    mm.getEntity().setMaxSpeed(limitedSpeed);
+                }
             }
 
-            // Apply to the carts. Take speed factor into account, limit to at most 0.4
-            // block movement
-            limitedSpeed = Math.min(0.4, this.updateSpeedFactor * limitedSpeed);
-            for (MinecartMember<?> mm : this) {
-                mm.getEntity().setMaxSpeed(limitedSpeed);
-            }
-
-            // Calculate the speed factor that will be used to adjust the distance between
-            // the minecarts
+            // Calculate the speed factor that will be used to adjust the distance between the minecarts
             for (MinecartMember<?> member : this) {
                 member.calculateSpeedFactor();
             }
 
             // Perform the rail post-movement logic
-            /* Timings: onPhysicsPostMove (Train Physics) */
+            /* Timings: onPhysicsPostMove  (Train Physics) */
             for (MinecartMember<?> member : this) {
                 member.onPhysicsPostMove();
-
-                if (this.breakPhysics)
-                    return true;
+                if (this.breakPhysics) return true;
             }
 
             // Always refresh at least once per tick
-            // This moment is strategically chosen, because after movement is the most
-            // likely
+            // This moment is strategically chosen, because after movement is the most likely
             // that a physics change will be required
             if (this.isLastUpdateStep()) {
                 notifyPhysicsChange();
             }
 
             // Update directions and perform connection checks after the position changes
-            this.updateDirection();
-            if (!this.doConnectionCheck()) {
-                return true; // false;
+            updateDirection();
+            if (!doConnectionCheck()) {
+                return true; //false;
             }
 
             // Refresh chunks - may cause group to unload here
-            this.updateChunkInformation(!this.canUnload(), false);
+            updateChunkInformation(!this.canUnload(), false);
 
-            // Refresh wheel position information, important to do it AFTER
-            // updateDirection()
-            this.updateWheels();
+            // Refresh wheel position information, important to do it AFTER updateDirection()
+            updateWheels();
 
-            // If keeping chunks loaded, verify none of the members of this train as
-            // derailed
+            // If keeping chunks loaded, verify none of the members of this train as derailed
             // and flying off into nowhere. When this happens, forcibly unload the train and
             // log a warning.
-            if (!this.isEmpty() && this.getProperties().isKeepingChunksLoaded()) {
+            if (!isEmpty() && this.getProperties().isKeepingChunksLoaded()) {
                 double thres = TCConfig.unloadRunawayTrainDistance * TCConfig.unloadRunawayTrainDistance;
                 for (MinecartMember<?> member : this) {
                     Location derailedStartPos = member.getFirstKnownDerailedPosition();
@@ -2224,9 +2156,8 @@ public class MinecartGroup extends MinecartGroupStore
                                     loc.getWorld().getName() + " x=" + loc.getBlockX() +
                                     " y=" + loc.getBlockY() + " z=" + loc.getBlockZ() +
                                     " derailed and went moving/flying off into nowhere!");
-                            traincarts.getLogger().log(Level.WARNING,
-                                    "The train's keepChunksLoaded property has been " +
-                                            " reset to false to prevent endless chunks being generated");
+                            traincarts.getLogger().log(Level.WARNING, "The train's keepChunksLoaded property has been " +
+                                    " reset to false to prevent endless chunks being generated");
                             traincarts.getLogger().log(Level.WARNING, "The derailment likely occurred at " +
                                     "x=" + derailedStartPos.getBlockX() + " y=" + derailedStartPos.getBlockY() +
                                     " z=" + derailedStartPos.getBlockZ());

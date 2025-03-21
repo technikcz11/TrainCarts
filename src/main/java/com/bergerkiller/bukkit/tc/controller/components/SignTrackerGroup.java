@@ -284,7 +284,7 @@ public class SignTrackerGroup extends SignTracker {
                 List<TrackedRail> rails = this.getOwner().getRailTracker().getRailInformation();
                 if (!this.detectorRegions.isEmpty()) {
                     // Secure copy
-                    MinecartMember<?>[] members = this.getOwner().toArray(new MinecartMember[0]);
+                    List<MinecartMember<?>> members = this.getOwner();
 
                     // Clear detector regions set for members
                     for (MinecartMember<?> member : members) {

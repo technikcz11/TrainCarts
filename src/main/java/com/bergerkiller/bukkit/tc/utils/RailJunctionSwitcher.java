@@ -7,10 +7,7 @@ import java.util.stream.Collectors;
 import com.bergerkiller.bukkit.common.utils.LogicUtil;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroupStore;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
-import com.bergerkiller.bukkit.tc.controller.components.RailJunction;
-import com.bergerkiller.bukkit.tc.controller.components.RailPath;
-import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
-import com.bergerkiller.bukkit.tc.controller.components.RailState;
+import com.bergerkiller.bukkit.tc.controller.components.*;
 import com.bergerkiller.bukkit.tc.controller.components.RailTracker.TrackedRail;
 import org.bukkit.block.Block;
 
@@ -19,7 +16,7 @@ import org.bukkit.block.Block;
  * to another. Not only switches the junction, but also moves carts
  * currently on the junction to the new junction.
  */
-public class RailJunctionSwitcher {
+public class RailJunctionSwitcher implements MinecartGroupStore.PhysicsChangeable {
     private final RailPiece rail;
     private final Predicate<MinecartMember<?>> memberFilter;
 
@@ -47,16 +44,17 @@ public class RailJunctionSwitcher {
         // what end of the path the train entered, and the distance traveled from
         // that end.
         List<MemberOnRail> members = this.rail.members().stream()
-            .filter(m -> !m.isUnloaded())
-            .filter(memberFilter)
-            .map(m -> m.getRailTracker().getRail())
-            .filter(rail -> rail.state.railPiece().equals(this.rail))
-            .map(MemberOnRail::new)
-            .collect(Collectors.toList());
+                .filter(Predicate.not(MinecartMember::isUnloaded))
+                .filter(memberFilter)
+                .map(MinecartMember::getRailTracker)
+                .map(RailTrackerMember::getRail)
+                .filter(rail -> rail.state.railPiece().equals(this.rail))
+                .map(MemberOnRail::new)
+                .toList();
 
         // Switch the rails, permanently altering the logic
         // Also notify a physics change, so trains recalculate things
-        MinecartGroupStore.notifyPhysicsChange();
+        notifyPhysicsChange();
         this.rail.type().switchJunction(this.rail.block(), from, to);
 
         // Move all minecarts that are currently on this rail to the new junction path.

@@ -150,7 +150,7 @@ public class TrainUpdateController {
     /**
      * Updates the attachments of all the groups specified
      *
-     * @param groups Collection of groups to update
+     * @param groups       Collection of groups to update
      * @param positionSync Whether to only synchronize position of the attachments. This will not
      *                     update attachment onTick() and will force attachment positions to be sync'd.
      */
@@ -242,15 +242,13 @@ public class TrainUpdateController {
             packetQueues.forAllQueues(PacketQueue::syncBegin);
 
             // Actual sending of network updates
-            try (ImplicitlySharedSet<MinecartGroup> groups = MinecartGroupStore.getGroups().clone()) {
-                // Update train positions
-                syncPositions(groups, false);
-                // Update playback of synchronous effects (sound & particle packets)
-                plugin.getEffectLoopPlayerController().updateSync();
-            } finally {
-                // Send the bundler packets / cleanup
-                packetQueues.forAllQueues(PacketQueue::syncEnd);
-            }
+            // Update train positions
+            syncPositions(MinecartGroupStore.getGroups(), false);
+            // Update playback of synchronous effects (sound & particle packets)
+            plugin.getEffectLoopPlayerController().updateSync();
+
+            // Send the bundler packets / cleanup
+            packetQueues.forAllQueues(PacketQueue::syncEnd);
         }
     }
 
@@ -272,9 +270,10 @@ public class TrainUpdateController {
             if (lag > 0) {
                 try {
                     Thread.sleep(lag);
-                } catch (InterruptedException e) {}
+                } catch (InterruptedException e) {
+                }
             }
         }
-        
+
     }
 }

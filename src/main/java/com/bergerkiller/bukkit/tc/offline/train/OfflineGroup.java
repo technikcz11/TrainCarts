@@ -8,6 +8,7 @@ import com.bergerkiller.bukkit.common.wrappers.LongHashSet;
 import com.bergerkiller.bukkit.common.wrappers.LongHashSet.LongIterator;
 import com.bergerkiller.bukkit.tc.TrainCarts;
 import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
+import com.bergerkiller.bukkit.tc.controller.MinecartGroupStore;
 import com.bergerkiller.bukkit.tc.controller.MinecartMember;
 import com.bergerkiller.bukkit.tc.offline.train.format.OfflineDataBlock;
 import com.bergerkiller.bukkit.tc.properties.TrainPropertiesStore;
@@ -60,7 +61,7 @@ public final class OfflineGroup {
                      "skipped-sign",
                      RailLookup.TrackedSign::getUniqueKey),
              /* Member List */
-             group,
+             group.clone(),
              OfflineMember::new);
     }
 
@@ -246,7 +247,7 @@ public final class OfflineGroup {
             return null;
         }
 
-        MinecartGroup group = MinecartGroup.create(this.name, groupMembers);
+        MinecartGroup group = MinecartGroupStore.create(this.name, groupMembers);
 
         // Initialize the group itself
         this.load(group);

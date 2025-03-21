@@ -1,30 +1,82 @@
 package com.bergerkiller.bukkit.tc.controller;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import com.bergerkiller.bukkit.common.controller.EntityPositionApplier;
+import org.bukkit.Chunk;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.HumanEntity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Minecart;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Vehicle;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.vehicle.VehicleDamageEvent;
+import org.bukkit.event.vehicle.VehicleDestroyEvent;
+import org.bukkit.event.vehicle.VehicleEntityCollisionEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
+import org.bukkit.event.vehicle.VehicleUpdateEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.Vector;
+
 import com.bergerkiller.bukkit.common.ToggledState;
 import com.bergerkiller.bukkit.common.bases.ExtendedEntity;
 import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.config.ConfigurationNode;
 import com.bergerkiller.bukkit.common.controller.EntityController;
-import com.bergerkiller.bukkit.common.controller.EntityPositionApplier;
 import com.bergerkiller.bukkit.common.entity.type.CommonMinecart;
 import com.bergerkiller.bukkit.common.inventory.MergedInventory;
 import com.bergerkiller.bukkit.common.math.OrientedBoundingBox;
 import com.bergerkiller.bukkit.common.math.Quaternion;
 import com.bergerkiller.bukkit.common.resources.SoundEffect;
-import com.bergerkiller.bukkit.common.utils.*;
+import com.bergerkiller.bukkit.common.utils.BlockUtil;
+import com.bergerkiller.bukkit.common.utils.CommonUtil;
+import com.bergerkiller.bukkit.common.utils.EntityUtil;
+import com.bergerkiller.bukkit.common.utils.FaceUtil;
+import com.bergerkiller.bukkit.common.utils.MathUtil;
+import com.bergerkiller.bukkit.common.utils.WorldUtil;
 import com.bergerkiller.bukkit.common.wrappers.BlockData;
 import com.bergerkiller.bukkit.common.wrappers.DamageSource;
 import com.bergerkiller.bukkit.common.wrappers.HumanHand;
 import com.bergerkiller.bukkit.common.wrappers.MoveType;
-import com.bergerkiller.bukkit.tc.*;
+import com.bergerkiller.bukkit.tc.CollisionMode;
+import com.bergerkiller.bukkit.tc.TCConfig;
+import com.bergerkiller.bukkit.tc.TCListener;
+import com.bergerkiller.bukkit.tc.TCSeatChangeListener;
+import com.bergerkiller.bukkit.tc.TrainCarts;
+import com.bergerkiller.bukkit.tc.Util;
 import com.bergerkiller.bukkit.tc.attachments.animation.Animation;
 import com.bergerkiller.bukkit.tc.attachments.animation.AnimationOptions;
 import com.bergerkiller.bukkit.tc.attachments.api.Attachment;
 import com.bergerkiller.bukkit.tc.attachments.config.AttachmentModel;
 import com.bergerkiller.bukkit.tc.attachments.control.CartAttachmentSeat;
-import com.bergerkiller.bukkit.tc.controller.components.*;
+import com.bergerkiller.bukkit.tc.controller.components.ActionTrackerMember;
+import com.bergerkiller.bukkit.tc.controller.components.AnimationController;
+import com.bergerkiller.bukkit.tc.controller.components.AttachmentControllerMember;
+import com.bergerkiller.bukkit.tc.controller.components.RailPath;
+import com.bergerkiller.bukkit.tc.controller.components.RailPiece;
+import com.bergerkiller.bukkit.tc.controller.components.RailState;
 import com.bergerkiller.bukkit.tc.controller.components.RailTracker.TrackedRail;
 import com.bergerkiller.bukkit.tc.controller.components.RailTracker.TrackedRailWalker;
+import com.bergerkiller.bukkit.tc.controller.components.RailTrackerMember;
+import com.bergerkiller.bukkit.tc.controller.components.SignTracker;
+import com.bergerkiller.bukkit.tc.controller.components.SignTrackerMember;
+import com.bergerkiller.bukkit.tc.controller.components.SoundLoop;
+import com.bergerkiller.bukkit.tc.controller.components.WheelTrackerMember;
 import com.bergerkiller.bukkit.tc.exception.GroupUnloadedException;
 import com.bergerkiller.bukkit.tc.exception.MemberMissingException;
 import com.bergerkiller.bukkit.tc.properties.CartProperties;
@@ -40,25 +92,14 @@ import com.bergerkiller.bukkit.tc.rails.logic.RailLogicVertical;
 import com.bergerkiller.bukkit.tc.rails.type.RailType;
 import com.bergerkiller.bukkit.tc.rails.type.RailTypeActivator;
 import com.bergerkiller.bukkit.tc.signactions.SignActionType;
-import com.bergerkiller.bukkit.tc.utils.*;
+import com.bergerkiller.bukkit.tc.utils.ChunkArea;
+import com.bergerkiller.bukkit.tc.utils.Effect;
+import com.bergerkiller.bukkit.tc.utils.TrackIterator;
+import com.bergerkiller.bukkit.tc.utils.TrackMap;
+import com.bergerkiller.bukkit.tc.utils.TrackWalkingPoint;
 import com.bergerkiller.generated.net.minecraft.world.entity.EntityHandle;
 import com.bergerkiller.generated.net.minecraft.world.entity.EntityLivingHandle;
 import com.bergerkiller.generated.net.minecraft.world.phys.AxisAlignedBBHandle;
-import org.bukkit.Chunk;
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.*;
-import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
-import org.bukkit.event.vehicle.*;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.util.Vector;
-
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class MinecartMember<T extends CommonMinecart<?>> extends EntityController<T>
         implements IPropertiesHolder, AnimationController, TrainCarts.Provider {
@@ -133,7 +174,6 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // Can the minecart reach the other?
         boolean m1moving = m1.isMoving();
         boolean m2moving = m2.isMoving();
-
         if (m1moving && m2moving) {
             if (!m1.isFollowingOnTrack(m2) && !m2.isFollowingOnTrack(m1))
                 return false;
@@ -495,22 +535,22 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         return null;
     }
 
-    public List<MinecartMember<?>> getNeightbours() {
+    public MinecartMember<?>[] getNeightbours() {
         if (this.getGroup() == null)
-            return Collections.emptyList();
+            return new MinecartMember<?>[0];
         int index = this.getIndex();
         if (index == -1)
-            return Collections.emptyList();
+            return new MinecartMember<?>[0];
         if (index > 0) {
             if (index < this.getGroup().size() - 1) {
-                return List.of(this.getGroup().get(index - 1), this.getGroup().get(index + 1));
+                return new MinecartMember<?>[] { this.getGroup().get(index - 1), this.getGroup().get(index + 1) };
             } else {
-                return Collections.singletonList(this.getGroup().get(index - 1));
+                return new MinecartMember<?>[] { this.getGroup().get(index - 1) };
             }
         } else if (index < this.getGroup().size() - 1) {
-            return Collections.singletonList(this.getGroup().get(index + 1));
+            return new MinecartMember<?>[] { this.getGroup().get(index + 1) };
         } else {
-            return Collections.emptyList();
+            return new MinecartMember<?>[0];
         }
     }
 
@@ -602,7 +642,11 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // Suffocation damage presently only occurs from blocks above because of Vanilla
         // behavior
         // If this Minecart does not suffocate at all, cancel this event
-        return cause != DamageCause.SUFFOCATION || this.isPassengerSuffocating(passenger);
+        if (cause == DamageCause.SUFFOCATION && !this.isPassengerSuffocating(passenger)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -1061,8 +1105,8 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         }
         entity.setPosition(position.posX, position.posY, position.posZ);
         entity.vel.set(position.motX * velocity,
-                position.motY * velocity,
-                position.motZ * velocity);
+                       position.motY * velocity,
+                       position.motZ * velocity);
     }
 
     /*
@@ -1197,8 +1241,10 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
             if (TrackIterator.isConnected(this.getBlock(), memberrail, true)) {
                 return true;
             }
-        } else if (TrackIterator.isConnected(this.getBlock(), memberrail, false)) {
-            return true;
+        } else {
+            if (TrackIterator.isConnected(this.getBlock(), memberrail, false)) {
+                return true;
+            }
         }
 
         return false;
@@ -1283,8 +1329,9 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // Remember the original direction (flip it) when the train is not moving
         RailState state = tracker.getState();
         if (this.direction == null ||
-                this.entity.vel.lengthSquared() > 1e-10 ||
-                state.position().motDot(this.direction) >= 0.0) {
+            this.entity.vel.lengthSquared() > 1e-10 ||
+            state.position().motDot(this.direction) >= 0.0)
+        {
             this.direction = state.position().getMotionFaceWithSubCardinal();
         } else {
             this.direction = state.position().getMotionFaceWithSubCardinal().getOppositeFace();
@@ -1620,9 +1667,9 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         // We lack a proper bounding box collision test
         // Instead we do a poor man's method of probing various points on the entity
         AxisAlignedBBHandle aabb = entityHandle.getBoundingBox();
-        double[] xval = {aabb.getMinX(), 0.5 * (aabb.getMinX() + aabb.getMaxX()), aabb.getMaxX()};
-        double[] yval = {aabb.getMinY(), 0.5 * (aabb.getMinY() + aabb.getMaxY()), aabb.getMaxY()};
-        double[] zval = {aabb.getMinZ(), 0.5 * (aabb.getMinZ() + aabb.getMaxZ()), aabb.getMaxZ()};
+        double[] xval = { aabb.getMinX(), 0.5 * (aabb.getMinX() + aabb.getMaxX()), aabb.getMaxX() };
+        double[] yval = { aabb.getMinY(), 0.5 * (aabb.getMinY() + aabb.getMaxY()), aabb.getMaxY() };
+        double[] zval = { aabb.getMinZ(), 0.5 * (aabb.getMinZ() + aabb.getMaxZ()), aabb.getMaxZ() };
         for (double x : xval) {
             for (double y : yval) {
                 for (double z : zval) {
@@ -2237,7 +2284,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
                     effect.volume = 100;
 
                     // Play the sound effect in first person, close to the player
-                    for (Player p : this.entity.getPlayerPassengers()) {
+                    for(Player p : this.entity.getPlayerPassengers()) {
                         effect.play(p);
                     }
 
@@ -2411,7 +2458,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         if (!this.isDerailed()) {
             this.firstKnownDerailedPosition = null;
         } else if (this.firstKnownDerailedPosition == null ||
-                this.firstKnownDerailedPosition.getWorld() != entity.getWorld()
+                   this.firstKnownDerailedPosition.getWorld() != entity.getWorld()
         ) {
             this.firstKnownDerailedPosition = entity.getLocation();
         }
