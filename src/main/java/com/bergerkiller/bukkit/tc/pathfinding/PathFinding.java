@@ -32,6 +32,10 @@ public class PathFinding {
     // Used while calculating paths to avoid infinite recursion
     private final Map<PathNode, Double> visitedNodes = new HashMap<>();
 
+    public static void clear() {
+        cachedResults.clear();
+    }
+
     private PathFinding() {}
 
     public static PathSearchResult findBestPath(PathNode start, PathNode destination) {

@@ -76,19 +76,6 @@ public final class PathSearchResult {
         this.needsToBeCached = true;
     }
 
-    /**
-     * If not already cached, caches this search result in the node. If a chain
-     * of nodes is the result, caches all other nodes part of this chain, too.
-     */
-    public void cache() {
-        PathSearchResult r = this;
-        while (r != null && r.needsToBeCached) {
-            r.needsToBeCached = false;
-            r.node.getWorld().cacheSearchResult(r);
-            r = r.next;
-        }
-    }
-
     public PathNode getDestination() {
         return destination;
     }

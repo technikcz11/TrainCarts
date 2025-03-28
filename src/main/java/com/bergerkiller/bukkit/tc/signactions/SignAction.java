@@ -314,11 +314,11 @@ public abstract class SignAction {
                     p.sendMessage(ChatColor.RED + "Please remove either sign and use /train reroute to fix");
 
                     // Send location message
-                    BlockLocation loc = node.location;
+                    BlockLocation loc = node.getLocation();
                     StringBuilder locMsg = new StringBuilder(100);
                     locMsg.append(ChatColor.RED).append("Other destination '" + destinationName + "' is ");
                     if (loc.getWorld() != info.getPlayer().getWorld()) {
-                        locMsg.append("on world ").append(ChatColor.WHITE).append(node.location.world);
+                        locMsg.append("on world ").append(ChatColor.WHITE).append(node.getLocation().world);
                         locMsg.append(' ').append(ChatColor.RED);
                     }
                     locMsg.append("at ").append(ChatColor.WHITE);

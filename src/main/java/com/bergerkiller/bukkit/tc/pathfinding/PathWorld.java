@@ -19,19 +19,17 @@ public class PathWorld implements TrainCarts.Provider {
     private final String _name;
     private final BlockMap<PathNode> _blockNodes;
     private final Map<String, PathNode> _nodes;
-    private final Map<PathFromToKey, PathSearchResult> _cachedSearchResults;
 
     public PathWorld(PathProvider provider, String worldName) {
         _provider = provider;
         _name = worldName;
         _blockNodes = new BlockMap<>();
         _nodes = new HashMap<>();
-        _cachedSearchResults = new HashMap<>();
     }
 
     protected void markChanged() {
-        _cachedSearchResults.clear();
         _provider.markChanged();
+        PathFinding.clear();
     }
 
     @Override
@@ -132,8 +130,8 @@ public class PathWorld implements TrainCarts.Provider {
         for (String name : node.getNames()) {
             addNodeName(node, name);
         }
-        _blockNodes.put(node.location, node);
-        _nodes.put(node.location.toString(), node);
+        _blockNodes.put(node.getLocation(), node);
+        _nodes.put(node.getLocation().toString(), node);
         markChanged();
     }
 
@@ -144,42 +142,12 @@ public class PathWorld implements TrainCarts.Provider {
                 _nodes.put(name, removed); // restore
             }
         }
-        PathNode removed = _blockNodes.remove(node.location);
+        PathNode removed = _blockNodes.remove(node.getLocation());
         if (removed != null && removed != node) {
-            _blockNodes.put(node.location, removed); // restore
+            _blockNodes.put(node.getLocation(), removed); // restore
         } else if (removed != null) {
-            _nodes.remove(node.location.toString());
+            _nodes.remove(node.getLocation().toString());
         }
         markChanged();
-    }
-
-    protected PathSearchResult findCachedSearchResult(PathNode node, PathNode destination) {
-        return _cachedSearchResults.getOrDefault(new PathFromToKey(node, destination),
-                PathSearchResult.DUMMY_NOT_FOUND);
-    }
-
-    protected void cacheSearchResult(PathSearchResult result) {
-        _cachedSearchResults.put(new PathFromToKey(result.getNode(), result.getDestination()), result);
-    }
-
-    private static final class PathFromToKey {
-        private final PathNode node;
-        private final PathNode destination;
-
-        public PathFromToKey(PathNode node, PathNode destination) {
-            this.node = node;
-            this.destination = destination;
-        }
-
-        @Override
-        public int hashCode() {
-            return node.hashCode() + 31 * destination.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            PathFromToKey other = (PathFromToKey) o;
-            return node == other.node && destination == other.destination;
-        }
     }
 }

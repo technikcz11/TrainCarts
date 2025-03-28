@@ -30,6 +30,7 @@ public class DebugToolTypeRegistry {
                 return Optional.of(item.factory.apply(debugToolName));
             }
         }
+
         return Optional.empty();
     }
 

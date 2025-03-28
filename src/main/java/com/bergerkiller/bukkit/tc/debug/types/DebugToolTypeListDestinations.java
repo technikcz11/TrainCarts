@@ -1,7 +1,6 @@
 package com.bergerkiller.bukkit.tc.debug.types;
 
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -129,9 +128,11 @@ public class DebugToolTypeListDestinations extends DebugToolTrackWalkerType {
                     if (destination != null) {
                         player.sendMessage(ChatColor.RED + "Destination " + destination + " can not be reached!");
                     }
+
                     player.sendMessage(ChatColor.RED + "A blocker sign at " +
                             ChatColor.YELLOW + DebugToolUtil.coordinates(walker.state.position()) +
                             ChatColor.RED + " is blocking trains!");
+
                     routeEvent.abortNavigation();
                 } else if (info == PathRailInfo.NODE) {
                     debugListRoutesFrom(trainCarts, player, walker.state, destination, player.isSneaking(), walker.movedTotal);
@@ -271,7 +272,7 @@ public class DebugToolTypeListDestinations extends DebugToolTrackWalkerType {
             }
 
             // Next rail block
-            railBlock = connection.destination.location.getBlock();
+            railBlock = connection.destination.getLocation().getBlock();
             Color color = colors[color_idx++ % colors.length];
             do {
                 if (--lim <= 0 || walker.movedTotal > maxDistance) {
@@ -296,7 +297,7 @@ public class DebugToolTypeListDestinations extends DebugToolTrackWalkerType {
 
     private void debugListAllRoutes(Player player, PathNode node, Block railBlock, double initialDistance) {
         MessageBuilder message = new MessageBuilder();
-        message.gray("Node ").white(DebugToolUtil.coordinates(node.location.x, node.location.y, node.location.z));
+        message.gray("Node ").white(DebugToolUtil.coordinates(node.getLocation().x, node.getLocation().y, node.getLocation().z));
         message.gray(" reached after ").white(MathUtil.round(initialDistance, 1)).gray(" blocks").newLine();
         message.gray("Destinations from ").white(node.getDisplayName()).gray(":").newLine();
 
@@ -306,12 +307,7 @@ public class DebugToolTypeListDestinations extends DebugToolTrackWalkerType {
             Collection<PathConnection> destinations = entry.getValue();
 
             // Remove connections that are not destination nodes (switchers only)
-            Iterator<PathConnection> iter = destinations.iterator();
-            while (iter.hasNext()) {
-                if (iter.next().destination.containsOnlySwitcher()) {
-                    iter.remove();
-                }
-            }
+            destinations.removeIf(pathConnection -> pathConnection.destination.containsOnlySwitcher());
 
             // Skip if empty
             if (destinations.isEmpty()) {

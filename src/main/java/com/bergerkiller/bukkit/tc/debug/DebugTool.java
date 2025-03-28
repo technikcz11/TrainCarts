@@ -120,10 +120,12 @@ public class DebugTool {
         }
 
         Optional<DebugToolType> match = DebugToolTypeRegistry.match(debugType);
-        if (!match.isPresent()) {
+
+        if (match.isEmpty()) {
             if (debounce(player)) {
                 player.sendMessage(ChatColor.RED + "Item has an unknown debug mode: " + debugType);
             }
+
             return true;
         }
 

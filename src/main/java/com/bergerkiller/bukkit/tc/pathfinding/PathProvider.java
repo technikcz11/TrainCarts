@@ -31,7 +31,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
-import java.util.stream.Stream;
 
 public class PathProvider extends Task implements TrainCarts.Provider {
     private static final String SWITCHER_NAME_FALLBACK = "::traincarts::switchable::";
@@ -81,12 +80,18 @@ public class PathProvider extends Task implements TrainCarts.Provider {
         registerRoutingHandler(new PathRoutingHandler() {
             @Override
             public void process(PathRouteEvent event) {
+                List<String> destinationNames = new ArrayList<>();
                 boolean switchable = false;
-                List<String> destinationNames = Collections.emptyList();
+
                 for (RailLookup.TrackedSign trackedSign : event.railPiece().signs()) {
+                    if (trackedSign.isRemoved()) {
+                        continue;
+                    }
+
                     // Check there is a SignAction at this sign
                     SignAction action = trackedSign.getAction();
-                    if (trackedSign.isRemoved() || action == null) {
+
+                    if (action == null) {
                         continue;
                     }
 
@@ -108,10 +113,8 @@ public class PathProvider extends Task implements TrainCarts.Provider {
                     if (signEvent.isRouteSwitchable() || !signEvent.getDestinationNames().isEmpty()) {
                         // Remember state for later
                         switchable |= signEvent.isRouteSwitchable();
+
                         if (!signEvent.getDestinationNames().isEmpty()) {
-                            if (destinationNames.isEmpty()) {
-                                destinationNames = new ArrayList<>();
-                            }
                             destinationNames.addAll(signEvent.getDestinationNames());
                         }
 
@@ -132,6 +135,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
                     if (switchable) {
                         newFoundNode.addSwitcher();
                     }
+
                     destinationNames.forEach(newFoundNode::addName);
                 }
             }
@@ -198,7 +202,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
      * @param durationMillis
      */
     public void setMaxProcessingPerTick(Integer durationMillis) {
-        if(durationMillis == null) return;
+        if (durationMillis == null) return;
         this.maxProcessingPerTick = durationMillis;
     }
 
@@ -304,10 +308,10 @@ public class PathProvider extends Task implements TrainCarts.Provider {
                             // Only destination sign(s), write names
                             stream.writeUTF(StringUtil.join("\n", node.getNames()));
                         }
-                        stream.writeUTF(node.location.world);
-                        stream.writeInt(node.location.x);
-                        stream.writeInt(node.location.y);
-                        stream.writeInt(node.location.z);
+                        stream.writeUTF(node.getLocation().world);
+                        stream.writeInt(node.getLocation().x);
+                        stream.writeInt(node.getLocation().y);
+                        stream.writeInt(node.getLocation().z);
                         i++;
                     }
                 }
@@ -559,7 +563,7 @@ public class PathProvider extends Task implements TrainCarts.Provider {
         if (!this.pendingNodes.isEmpty()) {
             Set<PathNode> newPending = new LinkedHashSet<>(this.pendingNodes);
             for (PathNode node : newPending) {
-                Block startRail = node.location.getBlock();
+                Block startRail = node.getLocation().getBlock();
                 RailType startType = RailType.getType(startRail);
                 if (startType == RailType.NONE) {
                     // Track type can not be identified
@@ -636,11 +640,11 @@ public class PathProvider extends Task implements TrainCarts.Provider {
         try {
             pendingOperations.offer(new PathFindOperation(this, node, state, junction));
         } catch (Throwable t) {
-            getTrainCarts().getLogger().log(Level.SEVERE, "Failed to schedule path finding operation for node at " + node.location, t);
+            getTrainCarts().getLogger().log(Level.SEVERE, "Failed to schedule path finding operation for node at " + node.getLocation(), t);
         }
     }
 
-    private static class PathFindOperation {
+    private static class PathFindOperation implements TrackWalkingPoint.Navigator<PathRoutingHandler.PathRouteEvent> {
         private final PathProvider provider;
         private final World world;
         private final TrackWalkingPoint p;
@@ -654,46 +658,48 @@ public class PathProvider extends Task implements TrainCarts.Provider {
             this.startNode = startNode;
 
             this.p = new TrackWalkingPoint(state);
-            this.p.setNavigator(new TrackWalkingPoint.Navigator<PathRoutingHandler.PathRouteEvent>() {
-                @Override
-                public void navigate(PathRoutingHandler.PathRouteEvent event) {
-                    // Handle event
-                    event.provider().handler.process(event);
-
-                    // Process results
-                    PathNode foundNode = event.getLastSetNode();
-                    if (foundNode != null && !startNode.location.equals(foundNode.location)) {
-                        // Calculate distance from the start node to this new node
-                        // Include distance between spawn position on rail, and the current position with the walker
-                        double totalDistance = p.movedTotal;
-                        {
-                            Location spawnPos = p.state.railType().getSpawnLocation(p.state.railBlock(), p.state.position().getMotionFace());
-                            totalDistance += spawnPos.distance(p.state.positionLocation());
-                        }
-
-                        // Add neighbour
-                        startNode.addNeighbour(foundNode, totalDistance, getJunctionName());
-                        if (DEBUG_MODE) {
-                            event.provider().getTrainCarts().log(Level.INFO, "MADE CONNECTION FROM " +
-                                    startNode.getDisplayName() + " TO " + foundNode.getDisplayName());
-                        }
-
-                        // Finished
-                        event.abortNavigation();
-                        return;
-                    }
-                }
-
-                @Override
-                public PathRoutingHandler.PathRouteEvent createNewEvent() {
-                    return new PathRoutingHandler.PathRouteEvent(provider, world);
-                }
-            });
+            this.p.setNavigator(this);
             this.p.setLoopFilter(true);
 
             // Include distance from spawn position of rails, to the junction start
             Location spawnPos = state.railType().getSpawnLocation(state.railBlock(), state.position().getMotionFace());
             this.p.movedTotal += state.positionLocation().distance(spawnPos);
+        }
+
+        @Override
+        public void navigate(PathRoutingHandler.PathRouteEvent event) {
+            // Handle event
+            event.provider().handler.process(event);
+
+            // Process results
+            PathNode foundNode = event.getLastSetNode();
+
+            if (foundNode == null || Objects.equals(startNode.getLocation(), foundNode.getLocation())) {
+                return;
+            }
+
+            // Calculate distance from the start node to this new node
+            // Include distance between spawn position on rail, and the current position with the walker
+            double totalDistance = p.movedTotal;
+
+            Location spawnPos = p.state.railType().getSpawnLocation(p.state.railBlock(), p.state.position().getMotionFace());
+            totalDistance += spawnPos.distance(p.state.positionLocation());
+
+            // Add neighbour
+            startNode.addNeighbour(foundNode, totalDistance, getJunctionName());
+
+            if (DEBUG_MODE) {
+                event.provider().getTrainCarts().log(Level.INFO, "MADE CONNECTION FROM " +
+                        startNode.getDisplayName() + " TO " + foundNode.getDisplayName());
+            }
+
+            // Finished
+            event.abortNavigation();
+        }
+
+        @Override
+        public PathRoutingHandler.PathRouteEvent createNewEvent() {
+            return new PathRoutingHandler.PathRouteEvent(provider, world);
         }
 
         public String getJunctionName() {

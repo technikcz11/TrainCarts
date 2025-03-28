@@ -162,8 +162,8 @@ public class SignActionDestination extends SignAction {
                         "' already exists on this world!");
                 ChatText text = ChatText.fromMessage(ChatColor.RED + "Find it at ");
                 ChatText command = ChatText.fromMessage(ChatColor.WHITE.toString() + ChatColor.UNDERLINE + "[" +
-                        node.location.x + " / " + node.location.y + " / " + node.location.z + "]");
-                command.setClickableSuggestedCommand("/tp @p " + node.location.x + " " + node.location.y + " " + node.location.z);
+                        node.getLocation().x + " / " + node.getLocation().y + " / " + node.getLocation().z + "]");
+                command.setClickableSuggestedCommand("/tp @p " + node.getLocation().x + " " + node.getLocation().y + " " + node.getLocation().z);
                 text.append(command);
                 text.sendTo(event.getPlayer());
                 return false;

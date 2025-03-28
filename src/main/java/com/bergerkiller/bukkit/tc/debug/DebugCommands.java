@@ -183,7 +183,7 @@ public class DebugCommands {
         }
 
         // Find the rails block
-        RailPiece rail = RailPiece.create(node.location.getBlock());
+        RailPiece rail = RailPiece.create(node.getLocation().getBlock());
         if (rail.isNone()) {
             player.sendMessage(ChatColor.RED + "There are no rails at this destination! (No longer exists?)");
             return;

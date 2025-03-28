@@ -11,7 +11,7 @@ import java.util.logging.Level;
 
 public class PathNode {
     private final PathWorld world;
-    public final BlockLocation location;
+    private final BlockLocation location;
     private final Set<String> names = new HashSet<>();
     private final List<PathConnection> neighbors = new ArrayList<>(3);
     public int index;
@@ -27,6 +27,10 @@ public class PathNode {
         for (PathWorld world : TrainCarts.plugin.getPathProvider().getWorlds()) {
             world.clearAll();
         }
+    }
+
+    public BlockLocation getLocation() {
+        return location;
     }
 
     /**
@@ -147,10 +151,11 @@ public class PathNode {
 
     private PathSearchResult findBestPath(PathNode destination) {
         PathSearchResult result = PathFinding.findBestPath(this, destination);
+
         if (result == PathSearchResult.DUMMY_NOT_FOUND) {
             result = PathSearchResult.missing(this, destination);
         }
-        result.cache();
+
         return result;
     }
 
@@ -165,23 +170,27 @@ public class PathNode {
      * @return The connection that was made
      */
     public PathConnection addNeighbour(final PathNode to, final double distance, final String junctionName) {
-        PathConnection conn;
         Iterator<PathConnection> iter = this.neighbors.iterator();
+
         while (iter.hasNext()) {
-            conn = iter.next();
-            if (conn.destination == to) {
-                if (conn.distance <= distance) {
-                    // Lower distance is contained - all done
-                    return conn;
-                } else {
-                    // Higher distance is contained - remove old element
-                    iter.remove();
-                    break;
-                }
+            PathConnection conn = iter.next();
+
+            if(conn.destination != to) {
+                continue;
+            }
+
+            if (conn.distance <= distance) {
+                // Lower distance is contained - all done
+                return conn;
+            } else {
+                // Higher distance is contained - remove old element
+                iter.remove();
+                break;
             }
         }
+
         // Add a new one
-        conn = new PathConnection(to, distance, junctionName);
+        PathConnection conn = new PathConnection(to, distance, junctionName);
         addNeighbourFast(conn);
         world.getProvider().scheduleNodeIfNotRecentlyRouted(to);
         world.markChanged();
@@ -198,14 +207,11 @@ public class PathNode {
      */
     public void clear() {
         this.neighbors.clear();
+
         for (PathNode node : world.getNodes()) {
-            Iterator<PathConnection> iter = node.neighbors.iterator();
-            while (iter.hasNext()) {
-                if (iter.next().destination == this) {
-                    iter.remove();
-                }
-            }
+            node.neighbors.removeIf(pathConnection -> pathConnection.destination == this);
         }
+
         world.markChanged();
     }
 
