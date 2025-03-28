@@ -1,15 +1,16 @@
 package com.bergerkiller.bukkit.tc.signactions.mutex;
 
-import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
-import org.bukkit.Color;
-import org.bukkit.Location;
-import org.bukkit.block.Block;
-
 import com.bergerkiller.bukkit.common.bases.IntVector3;
 import com.bergerkiller.bukkit.common.offline.OfflineBlock;
 import com.bergerkiller.bukkit.common.offline.OfflineWorld;
+import com.bergerkiller.bukkit.tc.controller.MinecartGroup;
 import com.bergerkiller.bukkit.tc.events.SignActionEvent;
+import org.bukkit.Color;
+import org.bukkit.Location;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+
+import java.util.Objects;
 
 public abstract class MutexZone {
     public final OfflineBlock signBlock;
@@ -30,10 +31,15 @@ public abstract class MutexZone {
     protected abstract void addToWorld(MutexZoneCacheWorld world);
 
     public abstract boolean containsBlock(IntVector3 block);
+
     public abstract boolean isNearby(IntVector3 block, int radius);
+
     public abstract void forAllContainedChunks(ChunkCoordConsumer action);
+
     public abstract long showDebugColorSeed();
+
     public abstract void showDebug(Player player, Color color);
+
     protected abstract void setLeversDown(boolean down);
 
     /**
@@ -88,15 +94,12 @@ public abstract class MutexZone {
     protected void setLevers(boolean down) {
         // Avoid spamming block data calls lots of times per tick
         // This function is just called a lot...
-        {
-            Boolean bState = Boolean.valueOf(down);
-            if (leversDown != bState) {
-                leversDown = bState;
-            } else {
-                return;
-            }
+
+        if (Objects.equals(leversDown, down)) {
+            return;
         }
 
+        leversDown = down;
         setLeversDown(down);
     }
 

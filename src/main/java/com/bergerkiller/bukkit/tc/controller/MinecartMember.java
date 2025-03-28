@@ -535,7 +535,7 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         return null;
     }
 
-    public MinecartMember<?>[] getNeightbours() {
+    public MinecartMember<?>[] getNeighbours() {
         if (this.getGroup() == null)
             return new MinecartMember<?>[0];
         int index = this.getIndex();

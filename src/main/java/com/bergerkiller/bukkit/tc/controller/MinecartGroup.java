@@ -201,9 +201,9 @@ public non-sealed class MinecartGroup extends MinecartGroupMembers implements IP
         savedConfig.remove("carts");
 
         // Save carts
-        List<ConfigurationNode> carts = this.stream()
+        List<ConfigurationNode> carts = stream()
                 .map(MinecartMember::saveConfig)
-                .collect(Collectors.toCollection(ArrayList::new));
+                .collect(Collectors.toList());
 
         if (setSaveLockMode == SaveLockOrientationMode.DISABLED) {
             // If lock orientation mode is DISABLED, strip all carts from locked orientation
@@ -275,11 +275,17 @@ public non-sealed class MinecartGroup extends MinecartGroupMembers implements IP
      * when saving
      */
     public boolean isSavedTrainOrientationLocked() {
+        // TODO: optimizations
+//        return parallelStream()
+//                .map(MinecartMember::getProperties)
+//                .anyMatch(p -> p.has(StandardProperties.LOCK_ORIENTATION_FLIPPED));
+
         for (MinecartMember<?> member : this) {
             if (member.getProperties().get(StandardProperties.LOCK_ORIENTATION_FLIPPED) != CartLockOrientation.NONE) {
                 return true;
             }
         }
+
         return false;
     }
 
@@ -764,8 +770,9 @@ public non-sealed class MinecartGroup extends MinecartGroupMembers implements IP
     }
 
     public void teleport(Block start, BlockFace direction) {
-        Location[] locations = new Location[this.size()];
         TrackWalkingPoint walker = new TrackWalkingPoint(start, direction);
+        Location[] locations = new Location[size()];
+
         walker.skipFirst();
         for (int i = 0; i < locations.length; i++) {
             boolean canMove;
@@ -1089,12 +1096,12 @@ public non-sealed class MinecartGroup extends MinecartGroupMembers implements IP
 
     @Override
     public List<String> getAnimationNames() {
-        if (this.isEmpty()) {
+        if (isEmpty()) {
             return Collections.emptyList();
-        } else if (this.size() == 1) {
-            return this.get(0).getAnimationNames();
+        } else if (size() == 1) {
+            return get(0).getAnimationNames();
         } else {
-            return this.stream()
+            return stream()
                     .flatMap(m -> m.getAnimationNames().stream())
                     .distinct()
                     .toList();
@@ -1135,6 +1142,8 @@ public non-sealed class MinecartGroup extends MinecartGroupMembers implements IP
      */
     @Override
     public boolean playNamedAnimation(AnimationOptions options) {
+//        return parallelStream().anyMatch(m -> m.playNamedAnimation(options));
+
         for (MinecartMember<?> member : this) {
             if (member.playNamedAnimation(options)) {
                 return true;

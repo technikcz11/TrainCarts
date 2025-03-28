@@ -984,8 +984,6 @@ public class TrainCarts extends PluginBase {
 
         // Now all is setup right, start a (potential) multithreaded updater
         this.trainUpdateController.postEnable();
-
-        Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, SignActionDetector.SignRefresher.INSTANCE, 0, 0);
     }
 
     @Override

@@ -120,7 +120,7 @@ public class MinecartMemberFurnace extends MinecartMember<CommonMinecartFurnace>
     }
 
     public boolean getCoalFromNeighbours() {
-        for (MinecartMember<?> mm : this.getNeightbours()) {
+        for (MinecartMember<?> mm : this.getNeighbours()) {
             //Is it a storage minecart?
             if (mm instanceof MinecartMemberChest) {
                 //has coal?

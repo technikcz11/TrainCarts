@@ -155,15 +155,9 @@ public class SignActionSwitcher extends SignAction {
             this.info = info;
             this.statements = parseDirectionStatements(info);
 
-            boolean calcHasFromDirections = false;
-            for (DirectionStatement statement : statements) {
-                if (!statement.isSwitchedFromSelf() && !statement.isDefault()) {
-                    calcHasFromDirections = true;
-                    break;
-                }
-            }
-
-            this.hasFromDirections = calcHasFromDirections;
+            this.hasFromDirections = statements
+                    .stream()
+                    .anyMatch(s -> !s.isSwitchedFromSelf() && !s.isDefault());
 
             // Whether to update the switcher (lever) state
             this.doTrain = info.isTrainSign() && info.isAction(SignActionType.GROUP_ENTER, SignActionType.GROUP_UPDATE);
@@ -577,7 +571,8 @@ public class SignActionSwitcher extends SignAction {
                     uuidsToIgnore.clear();
                     addAll(group);
                     if (railPiece != RailPiece.NONE) {
-                        railPiece.members().stream()
+                        railPiece.members()
+                                .stream()
                                 .map(MinecartMember::getGroup)
                                 .distinct()
                                 .forEach(this::addAll);

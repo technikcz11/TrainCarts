@@ -1028,7 +1028,7 @@ public final class RailLookup {
                 }
             } while (found);
 
-            return lines.toArray(new String[lines.size()]);
+            return lines.toArray(new String[0]);
         }
 
         @Override

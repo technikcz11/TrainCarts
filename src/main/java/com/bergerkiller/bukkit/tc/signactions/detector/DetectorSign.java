@@ -52,12 +52,9 @@ public class DetectorSign implements DetectorListener {
     }
 
     public void loadChunks(World world) {
-        SignActionDetector.SignRefresher.INSTANCE.registerLocation(new SignActionDetector.SignRefreshLocation(
-                world,
-                MathUtil.toChunk(this.sign.getPosition().x),
-                MathUtil.toChunk(this.sign.getPosition().z),
-                3
-        ));
+        int cx = MathUtil.toChunk(this.sign.getPosition().x);
+        int cz = MathUtil.toChunk(this.sign.getPosition().z);
+        WorldUtil.loadChunks(world, cx, cz, 3);
     }
 
     /**

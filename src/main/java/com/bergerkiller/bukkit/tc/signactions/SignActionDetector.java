@@ -30,55 +30,6 @@ import java.io.IOException;
 import java.util.*;
 
 public class SignActionDetector extends SignAction {
-    public static class SignRefreshLocation {
-        private final World world;
-        private final int x;
-        private final int z;
-        private final int radius;
-
-        public SignRefreshLocation(World world, int x, int z, int radius) {
-            this.world = world;
-            this.x = x;
-            this.z = z;
-            this.radius = radius;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof SignRefreshLocation that)) return false;
-            return x == that.x && z == that.z && radius == that.radius && Objects.equals(world, that.world);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(world, x, z);
-        }
-    }
-
-    public static class SignRefresher implements Runnable {
-        public static final SignRefresher INSTANCE = new SignRefresher();
-        private SignRefresher() {}
-
-        private Map<SignRefreshLocation, Integer> locationsToRefresh = new HashMap<>();
-
-        public void registerLocation(SignRefreshLocation location) {
-            Integer foundLocation = locationsToRefresh.get(location);
-
-            if(foundLocation == null || foundLocation < location.radius) {
-                locationsToRefresh.put(location, location.radius);
-            }
-        }
-
-        public void run() {
-            Set<SignRefreshLocation> locationsToRefresh = this.locationsToRefresh.keySet();
-            this.locationsToRefresh = new HashMap<>();
-
-            for (SignRefreshLocation toRefresh : locationsToRefresh) {
-                WorldUtil.loadChunks(toRefresh.world, toRefresh.x, toRefresh.z, toRefresh.radius);
-            }
-        }
-    }
-
     public static final SignActionDetector INSTANCE = new SignActionDetector();
 
     /**

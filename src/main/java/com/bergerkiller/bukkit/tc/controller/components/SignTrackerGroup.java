@@ -263,17 +263,13 @@ public class SignTrackerGroup extends SignTracker {
                 for (MinecartMember<?> member : owner) {
                     if (!member.isUnloaded() && member.getGroup() == owner) {
                         final SignTrackerMember tracker = member.getSignTracker();
-                        tracker.updateActiveSigns(() -> {
-                            return tracker.getOwner().isUnloaded() ?
-                                    ModificationTrackedEmptyList.emptyList() : tracker.liveActiveSigns;
-                        });
+                        tracker.updateActiveSigns(() -> tracker.getOwner().isUnloaded() ?
+                                ModificationTrackedEmptyList.emptyList() : tracker.liveActiveSigns);
                     }
                 }
 
                 // Update the active signs for this Group
-                updateActiveSigns(() -> {
-                    return owner.isUnloaded() ? ModificationTrackedEmptyList.emptyList() : liveActiveSigns;
-                });
+                updateActiveSigns(() -> owner.isUnloaded() ? ModificationTrackedEmptyList.emptyList() : liveActiveSigns);
 
                 // Update existing detector regions that are in use.
                 // Here we add members to regions other members were on, and
